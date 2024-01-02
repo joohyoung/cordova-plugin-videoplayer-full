@@ -1,4 +1,4 @@
-package com.moust.cordova.videoplayer;
+package com.joohyoung.cordova.videoplayer;
 
 import android.annotation.TargetApi;
 import android.app.Dialog;
@@ -16,6 +16,7 @@ import android.view.Gravity;
 import android.view.SurfaceHolder;
 import android.view.Window;
 import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.view.WindowManager.LayoutParams;
 import android.widget.LinearLayout;
@@ -116,15 +117,10 @@ public class VideoPlayer extends CordovaPlugin implements OnCompletionListener, 
     protected void openVideoDialog(String path, JSONObject options) {
         // Let's create the main dialog
         dialog = new Dialog(cordova.getActivity(), android.R.style.Theme_NoTitleBar);
-        dialog.getWindow().getAttributes().windowAnimations = android.R.style.Animation_Dialog;
+        // dialog.getWindow().getAttributes().windowAnimations = android.R.style.Animation_Dialog;
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setCancelable(true);
         dialog.setOnDismissListener(this);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            dialog.getWindow().getInsetsController().hide(WindowInsets.Type.statusBars());
-        } else {
-            dialog.getWindow().setFlags(LayoutParams.FLAG_FULLSCREEN, LayoutParams.FLAG_FULLSCREEN);
-        }
 
         // Main container layout
         LinearLayout main = new LinearLayout(cordova.getActivity());
@@ -132,6 +128,30 @@ public class VideoPlayer extends CordovaPlugin implements OnCompletionListener, 
         main.setOrientation(LinearLayout.VERTICAL);
         main.setHorizontalGravity(Gravity.CENTER_HORIZONTAL);
         main.setVerticalGravity(Gravity.CENTER_VERTICAL);
+
+        dialog.setContentView(main);
+
+        Window window = dialog.getWindow();
+        if (window != null) {
+            LayoutParams layoutParams = window.getAttributes();
+            layoutParams.width = LayoutParams.MATCH_PARENT;
+            layoutParams.height = LayoutParams.MATCH_PARENT;
+            dialog.show();
+            window.setAttributes(layoutParams);
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                WindowInsetsController insetsController = window.getInsetsController();
+                if (insetsController != null) {
+                    insetsController.hide(WindowInsets.Type.statusBars());
+                } else {
+                    Log.e(LOG_TAG, "InsetsController is null");
+                }
+            } else {
+                window.setFlags(LayoutParams.FLAG_FULLSCREEN, LayoutParams.FLAG_FULLSCREEN);
+            }
+        } else {
+            Log.e(LOG_TAG, "Window is null");
+        }
 
         VideoView videoView = new VideoView(cordova.getActivity());
         videoView.setLayoutParams(new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));

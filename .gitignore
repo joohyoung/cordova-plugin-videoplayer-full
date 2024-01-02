@@ -11,3 +11,7 @@ Thumbs.db
 *.log
 *.swp
 *.user
+
+
+*.iml
+/.idea/
