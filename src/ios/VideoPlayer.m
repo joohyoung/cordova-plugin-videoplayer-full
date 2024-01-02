@@ -5,8 +5,8 @@
 #import <AVKit/AVKit.h>
 
 @interface VideoPlayer : CDVPlugin {
-    AVPlayerViewController *moviePlayer;
-    AVPlayer *movie;
+    AVPlayerViewController *playerViewController;
+    AVPlayer *player;
 }
 
 
@@ -23,19 +23,19 @@
 
     NSString *mediaUrl = [command.arguments objectAtIndex:0];
     NSURL *url = [NSURL URLWithString:mediaUrl];
-    movie = [AVPlayer playerWithURL:url];
+    player = [AVPlayer playerWithURL:url];
 
-    moviePlayer = [[AVPlayerViewController alloc] init];
-    moviePlayer.player = movie;
-    moviePlayer.showsPlaybackControls = NO;
-    moviePlayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
+    playerViewController = [[AVPlayerViewController alloc] init];
+    playerViewController.player = player;
+    playerViewController.showsPlaybackControls = NO;
+    playerViewController.videoGravity = AVLayerVideoGravityResizeAspectFill;
 
     if(@available(iOS 11.0, *)) {
-        [moviePlayer setEntersFullScreenWhenPlaybackBegins:YES];
+        [playerViewController setEntersFullScreenWhenPlaybackBegins:YES];
     }
 
-    [self.viewController presentViewController:moviePlayer animated:YES completion:^(void){
-        [movie play];
+    [self.viewController presentViewController:playerViewController animated:YES completion:^(void){
+        [player play];
     }];
 
     pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
