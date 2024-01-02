@@ -22,12 +22,9 @@
     CDVPluginResult* pluginResult = nil;
 
     NSString *mediaUrl = [command.arguments objectAtIndex:0];
-
     NSURL *url = [NSURL URLWithString:mediaUrl];
-    AVURLAsset *asset = [AVURLAsset URLAssetWithURL:url options:nil];
-    AVPlayerItem *item = [AVPlayerItem playerItemWithAsset:asset];
+    movie = [AVPlayer playerWithURL:url];
 
-    movie = [AVPlayer playerWithPlayerItem:item];
     moviePlayer = [[AVPlayerViewController alloc] init];
     moviePlayer.player = movie;
     moviePlayer.showsPlaybackControls = NO;
