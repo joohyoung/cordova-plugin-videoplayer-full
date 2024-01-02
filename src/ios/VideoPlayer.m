@@ -30,15 +30,17 @@
 
     movie = [AVPlayer playerWithPlayerItem:item];
     moviePlayer = [[AVPlayerViewController alloc] init];
-    [moviePlayer setPlayer:movie];
+    moviePlayer.player = movie;
+    moviePlayer.showsPlaybackControls = NO;
+    moviePlayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
 
     if(@available(iOS 11.0, *)) {
         [moviePlayer setEntersFullScreenWhenPlaybackBegins:YES];
     }
 
-    // present modally so we get a close button
-    __weak VideoPlayer *weakSelf = self;
-    [self.viewController presentViewController:moviePlayer animated:YES completion:^(void){}];
+    [self.viewController presentViewController:moviePlayer animated:YES completion:^(void){
+        [movie play];
+    }];
 
     pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
