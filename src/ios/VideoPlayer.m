@@ -26,7 +26,6 @@
     NSURL *url = [NSURL URLWithString:mediaUrl];
     AVURLAsset *asset = [AVURLAsset URLAssetWithURL:url options:nil];
     AVPlayerItem *item = [AVPlayerItem playerItemWithAsset:asset];
-    [asset.resourceLoader setDelegate:self queue:dispatch_get_main_queue()];
 
     movie = [AVPlayer playerWithPlayerItem:item];
     moviePlayer = [[AVPlayerViewController alloc] init];
