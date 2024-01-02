@@ -1,9 +1,12 @@
 /********* VideoPlayer.m Cordova Plugin Implementation *******/
 
 #import <Cordova/CDV.h>
+#import <AVFoundation/AVFoundation.h>
+#import <AVKit/AVKit.h>
 
 @interface VideoPlayer : CDVPlugin {
-  // Member variables go here.
+    AVPlayerViewController *moviePlayer;
+    AVPlayer *movie;
 }
 
 
@@ -18,9 +21,29 @@
     NSError* error = nil;
     CDVPluginResult* pluginResult = nil;
 
+    NSString *mediaUrl = [command.arguments objectAtIndex:0];
+
+    NSURL *url = [NSURL URLWithString:mediaUrl];
+    AVURLAsset *asset = [AVURLAsset URLAssetWithURL:url options:nil];
+    AVPlayerItem *item = [AVPlayerItem playerItemWithAsset:asset];
+    [asset.resourceLoader setDelegate:self queue:dispatch_get_main_queue()];
+
+    movie = [AVPlayer playerWithPlayerItem:item];
+    moviePlayer = [[AVPlayerViewController alloc] init];
+    [moviePlayer setPlayer:movie];
+
+    if(@available(iOS 11.0, *)) {
+        [moviePlayer setEntersFullScreenWhenPlaybackBegins:YES];
+    }
+
+    // present modally so we get a close button
+    __weak VideoPlayer *weakSelf = self;
+    [self.viewController presentViewController:moviePlayer animated:YES completion:^(void){}];
+
     pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
+
 
 - (void)close:(CDVInvokedUrlCommand*)command;
 {
