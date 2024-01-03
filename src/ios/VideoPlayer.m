@@ -35,7 +35,7 @@
         [playerViewController setEntersFullScreenWhenPlaybackBegins:YES];
     }
 
-    [self.viewController presentViewController:playerViewController animated:YES completion:^(void){
+    [self.viewController presentViewController:playerViewController animated:NO completion:^(void){
         [player play];
     }];
 
