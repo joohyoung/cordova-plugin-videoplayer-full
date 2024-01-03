@@ -19,11 +19,22 @@
 
 - (void)play:(CDVInvokedUrlCommand*)command
 {
-    NSError* error = nil;
     CDVPluginResult* pluginResult = nil;
 
     NSString *mediaUrl = [command.arguments objectAtIndex:0];
+    if (mediaUrl == nil || [mediaUrl length] == 0) {
+        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Media URL was not provided"];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+        return;
+    }
+
     NSURL *url = [NSURL URLWithString:mediaUrl];
+    if (url == nil) {
+        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Invalid media URL"];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+        return;
+    }
+
     player = [AVPlayer playerWithURL:url];
 
     playerViewController = [[PortraitAVPlayerViewController alloc] init];
@@ -51,28 +62,29 @@
 
 - (void)close:(CDVInvokedUrlCommand*)command;
 {
-    // 재생 중인 영상이 있다면 중지
     if (player) {
         [player pause];
+        player = nil;
     }
 
-    // 옵저버가 있다면 제거
-    if (playerViewController) {
-        [[NSNotificationCenter defaultCenter] removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:nil];
-    }
-
-    // playerViewController가 표시되고 있다면 닫기
     if (playerViewController.presentingViewController) {
-        [playerViewController dismissViewControllerAnimated:NO completion:^{
-            // 자원 정리
+        [playerViewController dismissViewControllerAnimated:YES completion:^{
             playerViewController = nil;
-            player = nil;
-        }];
-    }
 
-    // 플러그인 결과 전송
-    CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
-    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+            CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+            [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+        }];
+    } else {
+        CDVPluginResult* pluginResult = nil;
+
+        if (playerViewController == nil) {
+            pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Video player was not initialized"];
+        } else {
+            pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Video player is not currently presented"];
+        }
+
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+    }
 }
 
 // 영상 재생이 끝난 후에 호출될 메서드
