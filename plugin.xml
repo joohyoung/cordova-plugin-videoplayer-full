@@ -22,6 +22,10 @@
         </config-file>
 
         <source-file src="src/ios/VideoPlayer.m" />
+        <header-file src="src/ios/LandscapeAVPlayerViewController.h" />
+        <source-file src="src/ios/LandscapeAVPlayerViewController.m" />
+        <header-file src="src/ios/PortraitAVPlayerViewController.h" />
+        <source-file src="src/ios/PortraitAVPlayerViewController.m" />
     </platform>
 
     <platform name="android">

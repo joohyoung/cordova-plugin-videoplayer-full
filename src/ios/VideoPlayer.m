@@ -3,6 +3,7 @@
 #import <Cordova/CDV.h>
 #import <AVFoundation/AVFoundation.h>
 #import <AVKit/AVKit.h>
+#import "PortraitAVPlayerViewController.h"
 
 @interface VideoPlayer : CDVPlugin {
     AVPlayerViewController *playerViewController;
@@ -25,7 +26,7 @@
     NSURL *url = [NSURL URLWithString:mediaUrl];
     player = [AVPlayer playerWithURL:url];
 
-    playerViewController = [[AVPlayerViewController alloc] init];
+    playerViewController = [[PortraitAVPlayerViewController alloc] init];
     playerViewController.player = player;
     playerViewController.showsPlaybackControls = NO;
     playerViewController.videoGravity = AVLayerVideoGravityResizeAspectFill;
