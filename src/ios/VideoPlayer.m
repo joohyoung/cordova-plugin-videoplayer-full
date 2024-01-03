@@ -51,10 +51,27 @@
 
 - (void)close:(CDVInvokedUrlCommand*)command;
 {
-    NSError* error = nil;
-    CDVPluginResult* pluginResult = nil;
+    // 재생 중인 영상이 있다면 중지
+    if (player) {
+        [player pause];
+    }
 
-    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+    // 옵저버가 있다면 제거
+    if (playerViewController) {
+        [[NSNotificationCenter defaultCenter] removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:nil];
+    }
+
+    // playerViewController가 표시되고 있다면 닫기
+    if (playerViewController.presentingViewController) {
+        [playerViewController dismissViewControllerAnimated:NO completion:^{
+            // 자원 정리
+            playerViewController = nil;
+            player = nil;
+        }];
+    }
+
+    // 플러그인 결과 전송
+    CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 
