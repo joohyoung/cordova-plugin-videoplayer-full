@@ -65,7 +65,7 @@
     [[NSNotificationCenter defaultCenter] removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:nil];
 
     // 영상 재생이 완료되면 playerViewController를 닫음
-    [playerViewController dismissViewControllerAnimated:YES completion:nil];
+    [playerViewController dismissViewControllerAnimated:NO completion:nil];
 }
 
 @end
