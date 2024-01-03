@@ -14,6 +14,19 @@
     <js-module src="www/videoplayer.js" name="VideoPlayer">
         <clobbers target="VideoPlayer" />
     </js-module>
+    <platform name="ios">
+        <config-file parent="/*" target="config.xml">
+            <feature name="VideoPlayer">
+                <param name="ios-package" value="VideoPlayer" />
+            </feature>
+        </config-file>
+
+        <source-file src="src/ios/VideoPlayer.m" />
+        <header-file src="src/ios/LandscapeAVPlayerViewController.h" />
+        <source-file src="src/ios/LandscapeAVPlayerViewController.m" />
+        <header-file src="src/ios/PortraitAVPlayerViewController.h" />
+        <source-file src="src/ios/PortraitAVPlayerViewController.m" />
+    </platform>
 
     <platform name="android">
 
