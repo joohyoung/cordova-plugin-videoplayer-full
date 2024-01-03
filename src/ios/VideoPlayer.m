@@ -51,6 +51,10 @@
                                                  name:AVPlayerItemDidPlayToEndTimeNotification
                                                object:player.currentItem];
 
+    // 탭 제스처 인식기를 playerViewController의 뷰에 추가
+    UITapGestureRecognizer *tapGestureRecognizer = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleVideoTap:)];
+    [playerViewController.view addGestureRecognizer:tapGestureRecognizer];
+
     [self.viewController presentViewController:playerViewController animated:NO completion:^(void){
         [player play];
     }];
@@ -95,6 +99,23 @@
 
     // 영상 재생이 완료되면 playerViewController를 닫음
     [playerViewController dismissViewControllerAnimated:NO completion:nil];
+}
+
+// 영상 탭 시 호출될 메서드
+- (void)handleVideoTap:(UITapGestureRecognizer *)recognizer {
+    // 재생을 멈추고
+    [player pause];
+
+    // 옵저버를 제거
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:player.currentItem];
+
+    // 화면을 닫고
+    if (playerViewController.presentingViewController) {
+        [playerViewController dismissViewControllerAnimated:NO completion:^{
+            playerViewController = nil;
+            player = nil;
+        }];
+    }
 }
 
 @end
