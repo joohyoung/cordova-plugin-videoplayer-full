@@ -12,15 +12,12 @@ import android.media.MediaPlayer.OnPreparedListener;
 import android.net.Uri;
 import android.os.Build;
 import android.util.Log;
-import android.view.Gravity;
 import android.view.SurfaceHolder;
+import android.view.SurfaceView;
 import android.view.Window;
-import android.view.WindowInsets;
-import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.view.WindowManager.LayoutParams;
 import android.widget.LinearLayout;
-import android.widget.VideoView;
 
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaArgs;
@@ -29,6 +26,8 @@ import org.apache.cordova.CordovaResourceApi;
 import org.apache.cordova.PluginResult;
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import java.io.IOException;
 
 public class VideoPlayer extends CordovaPlugin implements OnCompletionListener, OnPreparedListener, OnErrorListener, OnDismissListener {
 
@@ -115,47 +114,19 @@ public class VideoPlayer extends CordovaPlugin implements OnCompletionListener, 
 
     @TargetApi(Build.VERSION_CODES.JELLY_BEAN)
     protected void openVideoDialog(String path, JSONObject options) {
-        // Let's create the main dialog
         dialog = new Dialog(cordova.getActivity(), android.R.style.Theme_NoTitleBar);
-        // dialog.getWindow().getAttributes().windowAnimations = android.R.style.Animation_Dialog;
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setCancelable(true);
         dialog.setOnDismissListener(this);
 
-        // Main container layout
         LinearLayout main = new LinearLayout(cordova.getActivity());
         main.setLayoutParams(new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
-        main.setOrientation(LinearLayout.VERTICAL);
-        main.setHorizontalGravity(Gravity.CENTER_HORIZONTAL);
-        main.setVerticalGravity(Gravity.CENTER_VERTICAL);
-
         dialog.setContentView(main);
 
-        Window window = dialog.getWindow();
-        if (window != null) {
-            LayoutParams layoutParams = window.getAttributes();
-            layoutParams.width = LayoutParams.MATCH_PARENT;
-            layoutParams.height = LayoutParams.MATCH_PARENT;
-            dialog.show();
-            window.setAttributes(layoutParams);
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                WindowInsetsController insetsController = window.getInsetsController();
-                if (insetsController != null) {
-                    insetsController.hide(WindowInsets.Type.statusBars());
-                } else {
-                    Log.e(LOG_TAG, "InsetsController is null");
-                }
-            } else {
-                window.setFlags(LayoutParams.FLAG_FULLSCREEN, LayoutParams.FLAG_FULLSCREEN);
-            }
-        } else {
-            Log.e(LOG_TAG, "Window is null");
-        }
-
-        VideoView videoView = new VideoView(cordova.getActivity());
-        videoView.setLayoutParams(new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
-        main.addView(videoView);
+        // SurfaceView를 생성 및 설정
+        SurfaceView surfaceView = new SurfaceView(cordova.getActivity());
+        main.addView(surfaceView);
+        final SurfaceHolder holder = surfaceView.getHolder();
 
         player = new MediaPlayer();
         player.setOnPreparedListener(this);
@@ -218,40 +189,47 @@ public class VideoPlayer extends CordovaPlugin implements OnCompletionListener, 
             }
         }
 
-        final SurfaceHolder mHolder = videoView.getHolder();
-        mHolder.setKeepScreenOn(true);
-        mHolder.addCallback(new SurfaceHolder.Callback() {
-            @Override
-            public void surfaceCreated(SurfaceHolder holder) {
-                player.setDisplay(holder);
-                try {
-                    player.prepare();
-                } catch (Exception e) {
-                    PluginResult result = new PluginResult(PluginResult.Status.ERROR, e.getLocalizedMessage());
-                    result.setKeepCallback(false); // release status callback in JS side
-                    callbackContext.sendPluginResult(result);
-                    callbackContext = null;
-                }
+        holder.addCallback(new SurfaceHolder.Callback() {
+          @Override
+          public void surfaceCreated(SurfaceHolder surfaceHolder) {
+            player.setDisplay(surfaceHolder);
+            try {
+              // MediaPlayer 준비
+              player.prepare();
+            } catch (IOException e) {
+              handleError(e.getLocalizedMessage());
             }
+          }
 
-            @Override
-            public void surfaceDestroyed(SurfaceHolder holder) {
-                player.release();
-            }
+          @Override
+          public void surfaceChanged(SurfaceHolder surfaceHolder, int i, int i1, int i2) {
+            // Surface 변경 사항 처리
+          }
 
-            @Override
-            public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+          @Override
+          public void surfaceDestroyed(SurfaceHolder surfaceHolder) {
+            // Surface 파괴시 처리
+            if (player.isPlaying()) {
+              player.stop();
             }
+            player.release();
+          }
         });
 
         WindowManager.LayoutParams lp = new WindowManager.LayoutParams();
         lp.copyFrom(dialog.getWindow().getAttributes());
-        lp.width = WindowManager.LayoutParams.MATCH_PARENT;
-        lp.height = WindowManager.LayoutParams.MATCH_PARENT;
-
-        dialog.setContentView(main);
         dialog.show();
         dialog.getWindow().setAttributes(lp);
+    }
+
+    private void handleError(String errorMessage) {
+        PluginResult result = new PluginResult(PluginResult.Status.ERROR, errorMessage);
+        result.setKeepCallback(false);
+        callbackContext.sendPluginResult(result);
+        callbackContext = null;
+        if (dialog != null) {
+            dialog.dismiss();
+        }
     }
 
     @Override
