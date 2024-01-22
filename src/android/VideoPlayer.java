@@ -125,6 +125,18 @@ public class VideoPlayer extends CordovaPlugin implements OnCompletionListener, 
 
         // SurfaceView를 생성 및 설정
         SurfaceView surfaceView = new SurfaceView(cordova.getActivity());
+        surfaceView.setOnClickListener(v -> {
+            if (player.isPlaying()) {
+                player.stop();
+            }
+            player.release();
+            dialog.dismiss();
+            if (callbackContext != null) {
+                PluginResult result = new PluginResult(PluginResult.Status.OK);
+                callbackContext.sendPluginResult(result);
+                callbackContext = null;
+            }
+        });
         main.addView(surfaceView);
         final SurfaceHolder holder = surfaceView.getHolder();
 
