@@ -221,9 +221,6 @@ public class VideoPlayer extends CordovaPlugin implements OnCompletionListener, 
           @Override
           public void surfaceDestroyed(SurfaceHolder surfaceHolder) {
             // Surface 파괴시 처리
-            if (player.isPlaying()) {
-              player.stop();
-            }
             player.release();
           }
         });
