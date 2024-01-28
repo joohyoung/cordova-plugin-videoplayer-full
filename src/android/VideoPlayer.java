@@ -79,20 +79,7 @@ public class VideoPlayer extends CordovaPlugin implements OnCompletionListener, 
 
             return true;
         } else if (action.equals("close")) {
-            if (dialog != null) {
-                if (player.isPlaying()) {
-                    player.stop();
-                }
-                player.release();
-                dialog.dismiss();
-            }
-
-            if (callbackContext != null) {
-                PluginResult result = new PluginResult(PluginResult.Status.OK);
-                result.setKeepCallback(false); // release status callback in JS side
-                callbackContext.sendPluginResult(result);
-            }
-
+            handleClose();
             return true;
         }
         return false;
@@ -124,18 +111,11 @@ public class VideoPlayer extends CordovaPlugin implements OnCompletionListener, 
         dialog.setContentView(main);
 
         // SurfaceView를 생성 및 설정
+        // SurfaceView를 생성 및 설정
         SurfaceView surfaceView = new SurfaceView(cordova.getActivity());
         surfaceView.setOnClickListener(v -> {
-            if (player.isPlaying()) {
-                player.stop();
-            }
-            player.release();
-            dialog.dismiss();
-            if (callbackContext != null) {
-                PluginResult result = new PluginResult(PluginResult.Status.OK);
-                callbackContext.sendPluginResult(result);
-                callbackContext = null;
-            }
+            // 터치 이벤트가 발생하면 handleClose 메소드를 호출하도록 수정
+            handleClose();
         });
         main.addView(surfaceView);
         final SurfaceHolder holder = surfaceView.getHolder();
@@ -202,27 +182,29 @@ public class VideoPlayer extends CordovaPlugin implements OnCompletionListener, 
         }
 
         holder.addCallback(new SurfaceHolder.Callback() {
-          @Override
-          public void surfaceCreated(SurfaceHolder surfaceHolder) {
-            player.setDisplay(surfaceHolder);
-            try {
-              // MediaPlayer 준비
-              player.prepare();
-            } catch (IOException e) {
-              handleError(e.getLocalizedMessage());
+            @Override
+            public void surfaceCreated(SurfaceHolder surfaceHolder) {
+                player.setDisplay(surfaceHolder);
+                try {
+                    // MediaPlayer 준비
+                    player.prepare();
+                } catch (IOException e) {
+                    handleError(e.getLocalizedMessage());
+                }
             }
-          }
 
-          @Override
-          public void surfaceChanged(SurfaceHolder surfaceHolder, int i, int i1, int i2) {
-            // Surface 변경 사항 처리
-          }
+            @Override
+            public void surfaceChanged(SurfaceHolder surfaceHolder, int i, int i1, int i2) {
+                // Surface 변경 사항 처리
+            }
 
-          @Override
-          public void surfaceDestroyed(SurfaceHolder surfaceHolder) {
-            // Surface 파괴시 처리
-            player.release();
-          }
+            @Override
+            public void surfaceDestroyed(SurfaceHolder surfaceHolder) {
+                if (player != null) {
+                    player.release();
+                    player = null;
+                }
+            }
         });
 
         WindowManager.LayoutParams lp = new WindowManager.LayoutParams();
@@ -241,14 +223,33 @@ public class VideoPlayer extends CordovaPlugin implements OnCompletionListener, 
         }
     }
 
+    // 중앙화된 자원 해제 메소드
+    private void handleClose() {
+        // 화면 터치 시 player가 null이 아닐 때만 처리하도록 수정
+        if (player != null) {
+            if (player.isPlaying()) {
+                player.stop();
+            }
+            player.release();
+            player = null; // player를 해제한 후 null로 설정하여 중복 해제 방지
+        }
+        if (dialog != null) {
+            dialog.dismiss();
+            dialog = null;
+        }
+        if (callbackContext != null) {
+            PluginResult result = new PluginResult(PluginResult.Status.OK);
+            result.setKeepCallback(false);
+            callbackContext.sendPluginResult(result);
+            callbackContext = null;
+        }
+    }
+
+    // 기존의 onError 메소드
     @Override
     public boolean onError(MediaPlayer mp, int what, int extra) {
         Log.e(LOG_TAG, "MediaPlayer.onError(" + what + ", " + extra + ")");
-        if (mp.isPlaying()) {
-            mp.stop();
-        }
-        mp.release();
-        dialog.dismiss();
+        handleError("MediaPlayer error occurred");
         return false;
     }
 
@@ -257,22 +258,17 @@ public class VideoPlayer extends CordovaPlugin implements OnCompletionListener, 
         mp.start();
     }
 
+    // 기존의 onCompletion 메소드
     @Override
     public void onCompletion(MediaPlayer mp) {
         Log.d(LOG_TAG, "MediaPlayer completed");
-        mp.release();
-        dialog.dismiss();
+        handleClose();
     }
 
     @Override
     public void onDismiss(DialogInterface dialog) {
         Log.d(LOG_TAG, "Dialog dismissed");
-        if (callbackContext != null) {
-            PluginResult result = new PluginResult(PluginResult.Status.OK);
-            result.setKeepCallback(false); // release status callback in JS side
-            callbackContext.sendPluginResult(result);
-            callbackContext = null;
-        }
+        handleClose();
     }
 
 }
