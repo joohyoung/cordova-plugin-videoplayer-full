@@ -18,7 +18,7 @@ import android.view.SurfaceView;
 import android.view.Window;
 import android.view.WindowManager;
 import android.view.WindowManager.LayoutParams;
-import android.widget.LinearLayout;
+import android.widget.FrameLayout;
 
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaArgs;
@@ -110,8 +110,9 @@ public class VideoPlayer extends CordovaPlugin implements OnCompletionListener, 
     dialog.setCancelable(true);
     dialog.setOnDismissListener(this);
 
-    LinearLayout main = new LinearLayout(cordova.getActivity());
-    main.setLayoutParams(new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+        // FrameLayout으로 변경하여 중앙 배치가 용이하도록 함
+        FrameLayout main = new FrameLayout(cordova.getActivity());
+        main.setLayoutParams(new FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
     dialog.setContentView(main);
 
     // SurfaceView를 생성 및 설정
@@ -120,18 +121,20 @@ public class VideoPlayer extends CordovaPlugin implements OnCompletionListener, 
       // 터치 이벤트가 발생하면 handleClose 메소드를 호출하도록 수정
       handleClose();
     });
-    main.addView(surfaceView);
+
+        // SurfaceView를 FrameLayout에 추가하고 중앙에 배치
+        FrameLayout.LayoutParams surfaceLayoutParams = new FrameLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
+        surfaceLayoutParams.gravity = Gravity.CENTER;
+        main.addView(surfaceView, surfaceLayoutParams);
+
     final SurfaceHolder holder = surfaceView.getHolder();
 
     player = new MediaPlayer();
     player.setOnPreparedListener(this);
     player.setOnCompletionListener(this);
-    player.setOnErrorListener(new MediaPlayer.OnErrorListener() {
-        @Override
-        public boolean onError(MediaPlayer mp, int what, int extra) {
+        player.setOnErrorListener((mp, what, extra) -> {
             handleError("MediaPlayer 오류: " + what + ", " + extra);
             return true;
-        }
     });
 
     if (path.startsWith(ASSETS)) {
@@ -274,14 +277,23 @@ public class VideoPlayer extends CordovaPlugin implements OnCompletionListener, 
 
       // 동영상의 가로세로 비율 계산
       float videoAspectRatio = (float) videoWidth / videoHeight;
+        float screenAspectRatio = (float) screenWidth / screenHeight;
 
-      // SurfaceView의 높이를 화면 높이로 설정
-      int surfaceHeight = screenHeight;
-      int surfaceWidth = (int) (surfaceHeight * videoAspectRatio);
+        int surfaceWidth, surfaceHeight;
+
+        if (videoAspectRatio > screenAspectRatio) {
+            // 동영상이 화면보다 더 와이드한 경우
+            surfaceHeight = screenHeight;
+            surfaceWidth = (int) (surfaceHeight * videoAspectRatio);
+        } else {
+            // 동영상이 화면보다 덜 와이드한 경우
+            surfaceWidth = screenWidth;
+            surfaceHeight = (int) (surfaceWidth / videoAspectRatio);
+        }
 
       // SurfaceView의 레이아웃 파라미터 설정
-      LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(surfaceWidth, surfaceHeight);
-      layoutParams.gravity = Gravity.CENTER;
+        FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(surfaceWidth, surfaceHeight);
+        layoutParams.gravity = Gravity.CENTER; // 중앙에 배치
       surfaceView.setLayoutParams(layoutParams);
 
       mp.start();
