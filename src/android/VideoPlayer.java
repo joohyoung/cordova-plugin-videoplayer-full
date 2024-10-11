@@ -12,12 +12,13 @@ import android.media.MediaPlayer.OnPreparedListener;
 import android.net.Uri;
 import android.os.Build;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.Window;
 import android.view.WindowManager;
 import android.view.WindowManager.LayoutParams;
-import android.widget.LinearLayout;
+import android.widget.FrameLayout;
 
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaArgs;
@@ -40,6 +41,8 @@ public class VideoPlayer extends CordovaPlugin implements OnCompletionListener, 
     private Dialog dialog;
 
     private MediaPlayer player;
+
+    private SurfaceView surfaceView; // SurfaceView를 멤버 변수로 변경
 
     /**
      * Executes the request and returns PluginResult.
@@ -106,24 +109,32 @@ public class VideoPlayer extends CordovaPlugin implements OnCompletionListener, 
         dialog.setCancelable(true);
         dialog.setOnDismissListener(this);
 
-        LinearLayout main = new LinearLayout(cordova.getActivity());
-        main.setLayoutParams(new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+        // FrameLayout으로 변경하여 중앙 배치가 용이하도록 함
+        FrameLayout main = new FrameLayout(cordova.getActivity());
+        main.setLayoutParams(new FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
         dialog.setContentView(main);
 
         // SurfaceView를 생성 및 설정
-        // SurfaceView를 생성 및 설정
-        SurfaceView surfaceView = new SurfaceView(cordova.getActivity());
+        surfaceView = new SurfaceView(cordova.getActivity());
         surfaceView.setOnClickListener(v -> {
             // 터치 이벤트가 발생하면 handleClose 메소드를 호출하도록 수정
             handleClose();
         });
-        main.addView(surfaceView);
+
+        // SurfaceView를 FrameLayout에 추가하고 중앙에 배치
+        FrameLayout.LayoutParams surfaceLayoutParams = new FrameLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
+        surfaceLayoutParams.gravity = Gravity.CENTER;
+        main.addView(surfaceView, surfaceLayoutParams);
+
         final SurfaceHolder holder = surfaceView.getHolder();
 
         player = new MediaPlayer();
         player.setOnPreparedListener(this);
         player.setOnCompletionListener(this);
-        player.setOnErrorListener(this);
+        player.setOnErrorListener((mp, what, extra) -> {
+            handleError("MediaPlayer 오류: " + what + ", " + extra);
+            return true;
+        });
 
         if (path.startsWith(ASSETS)) {
             String f = path.substring(15);
@@ -185,12 +196,8 @@ public class VideoPlayer extends CordovaPlugin implements OnCompletionListener, 
             @Override
             public void surfaceCreated(SurfaceHolder surfaceHolder) {
                 player.setDisplay(surfaceHolder);
-                try {
-                    // MediaPlayer 준비
-                    player.prepare();
-                } catch (IOException e) {
-                    handleError(e.getLocalizedMessage());
-                }
+                // MediaPlayer 준비
+                player.prepareAsync();  // 비동기적으로 준비
             }
 
             @Override
@@ -245,7 +252,6 @@ public class VideoPlayer extends CordovaPlugin implements OnCompletionListener, 
         }
     }
 
-    // 기존의 onError 메소드
     @Override
     public boolean onError(MediaPlayer mp, int what, int extra) {
         Log.e(LOG_TAG, "MediaPlayer.onError(" + what + ", " + extra + ")");
@@ -255,10 +261,42 @@ public class VideoPlayer extends CordovaPlugin implements OnCompletionListener, 
 
     @Override
     public void onPrepared(MediaPlayer mp) {
+        int videoWidth = mp.getVideoWidth();
+        int videoHeight = mp.getVideoHeight();
+
+        if (videoWidth == 0 || videoHeight == 0) {
+            handleError("동영상의 크기를 가져올 수 없습니다.");
+            return;
+        }
+
+        // 화면의 너비와 높이 가져오기
+        int screenWidth = cordova.getActivity().getWindowManager().getDefaultDisplay().getWidth();
+        int screenHeight = cordova.getActivity().getWindowManager().getDefaultDisplay().getHeight();
+
+        // 동영상의 가로세로 비율 계산
+        float videoAspectRatio = (float) videoWidth / videoHeight;
+        float screenAspectRatio = (float) screenWidth / screenHeight;
+
+        int surfaceWidth, surfaceHeight;
+
+        if (videoAspectRatio > screenAspectRatio) {
+            // 동영상이 화면보다 더 와이드한 경우
+            surfaceHeight = screenHeight;
+            surfaceWidth = (int) (surfaceHeight * videoAspectRatio);
+        } else {
+            // 동영상이 화면보다 덜 와이드한 경우
+            surfaceWidth = screenWidth;
+            surfaceHeight = (int) (surfaceWidth / videoAspectRatio);
+        }
+
+        // SurfaceView의 레이아웃 파라미터 설정
+        FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(surfaceWidth, surfaceHeight);
+        layoutParams.gravity = Gravity.CENTER; // 중앙에 배치
+        surfaceView.setLayoutParams(layoutParams);
+
         mp.start();
     }
 
-    // 기존의 onCompletion 메소드
     @Override
     public void onCompletion(MediaPlayer mp) {
         Log.d(LOG_TAG, "MediaPlayer completed");
