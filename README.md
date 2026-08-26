@@ -79,14 +79,9 @@ VideoPlayer.play(
 
 The published plugin version is stored in two places that must always match: the `version` field in `package.json` and the `version` attribute on the root `<plugin>` element in `plugin.xml`.
 
-This repository ships a `version-up` agent skill that reads both values, proposes patch/minor/major candidates, validates the new value as a stable SemVer `M.m.p` greater than the current one, updates both files, and then re-reads them and runs `npm test`. It never commits, tags, pushes, publishes, or creates a release.
+This repository ships a `version-up` agent skill that bumps both values together. It **refuses to proceed if the two files already disagree**, rather than guessing which one is correct, and it likewise stops if the current version is not a stable SemVer `M.m.p`. Given an increment unit (`major`/`minor`/`patch`) or an explicit version it uses that directly; with no argument it proposes candidates and asks. After updating both files it re-reads them and runs `npm test`. It never commits, tags, pushes, publishes, or creates a release.
 
-The skill source lives at `.claude/skills/version-up/SKILL.md`. `.agents/skills/version-up` is a repository-relative symlink to that same directory, so Claude Code and Codex both read one copy:
-
-- Claude Code loads project skills from `.claude/skills/<name>/SKILL.md`.
-- Codex scans `$REPO_ROOT/.agents/skills` and follows symlinked skill folders.
-
-Invoke it as `/version-up` in Claude Code or `$version-up` in Codex. Edit only `.claude/skills/version-up/SKILL.md`.
+The skill source lives at `.claude/skills/version-up/SKILL.md`, and `.agents/skills/version-up` is a repository-relative symlink to that same directory so Claude Code and Codex both read one copy. See the **"이 스킬이 두 경로에 있는 이유"** section of that file for the discovery paths and invocation forms of each product — they are documented there only, so that a correction lands in one place. Edit only `.claude/skills/version-up/SKILL.md`.
 
 
 # Troubleshooting

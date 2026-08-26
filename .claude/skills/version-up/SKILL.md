@@ -213,9 +213,18 @@ console.log(next);
 
 ## 이 스킬이 두 경로에 있는 이유
 
-기준 구현은 `.claude/skills/version-up/SKILL.md` 하나뿐이다. `.agents/skills/version-up`은 그 디렉터리를 가리키는 저장소 상대 심볼릭 링크다.
+기준 구현은 `.claude/skills/version-up/SKILL.md` 하나뿐이다. `.agents/skills/version-up`은 그 디렉터리를 가리키는 저장소 상대 심볼릭 링크다. 사본을 두 벌 두지 않으므로 두 제품이 언제나 같은 절차를 실행한다. **이 스킬을 고칠 때는 `.claude/skills/version-up/SKILL.md`만 고친다.**
 
-- Claude Code는 프로젝트 스킬을 `.claude/skills/<이름>/SKILL.md`에서 읽는다.
-- Codex는 `$REPO_ROOT/.agents/skills`를 탐색하고 심볼릭 링크된 스킬 폴더의 링크 대상을 따라간다.
+두 탐색 경로의 근거는 각 제품의 공식 문서이며, **아래는 2026-08-26 확인 시점의 동작이다.** 두 제품 모두 외부 도구이므로 탐색 경로와 심볼릭 링크 처리는 바뀔 수 있다. 링크가 해석되지 않으면 이 절을 근거로 삼지 말고 해당 제품의 최신 문서를 다시 확인한다.
 
-사본을 두 벌 두지 않으므로 두 제품이 언제나 같은 절차를 실행한다. 이 스킬을 고칠 때는 `.claude/skills/version-up/SKILL.md`만 고친다.
+| 제품 | 탐색 경로 | 심볼릭 링크 | 명시 호출 |
+|---|---|---|---|
+| Claude Code | `.claude/skills/<이름>/SKILL.md` | `<이름>` 항목이 링크면 대상의 `SKILL.md`를 읽는다 | `/version-up` |
+| Codex | `$REPO_ROOT/.agents/skills` | 링크된 스킬 폴더의 대상을 따라간다 | `$version-up` |
+
+- Claude Code: [Extend Claude with skills](https://code.claude.com/docs/en/skills)
+- Codex: [Build skills](https://learn.chatgpt.com/docs/build-skills)
+
+**[미확인]** 이 저장소에서 Codex가 실제로 링크를 따라 이 스킬을 발견하는지는 사용하는 Codex 버전에 따라 다를 수 있다. `.agents/skills` **디렉터리 자체**를 링크로 두면 발견되지 않는다는 보고가 있으나(openai/codex#11314, `not planned`로 종료), 이 저장소는 하위 항목만 링크하므로 공식 문서가 지원한다고 적은 범위에 해당한다.
+
+이 표가 두 경로에 관한 유일한 기재다. `README.md`는 이 절을 가리키기만 하고 같은 내용을 옮겨 적지 않는다 — 두 곳에 적으면 한쪽만 고쳐져 어긋난다.
