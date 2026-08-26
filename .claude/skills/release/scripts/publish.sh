@@ -41,7 +41,7 @@ origin_push_urls=$(git remote get-url --push --all origin 2>/dev/null) || fail "
 origin_fingerprint=$(printf '%s' "$origin_fetch_urls" | fingerprint) || fail "origin URL fingerprint 계산에 실패했습니다."
 [ "$origin_fingerprint" = "$expected_origin_fingerprint" ] || fail "origin URL fingerprint가 preflight 결과와 다릅니다."
 
-git fetch origin "refs/heads/$branch:refs/remotes/origin/$branch" || fail "origin/$branch fetch에 실패했습니다. 버전 파일은 수정된 상태로 남습니다."
+git fetch origin "refs/heads/$branch:refs/remotes/origin/$branch" >/dev/null 2>&1 || fail "origin/$branch fetch에 실패했습니다. 원격 URL은 노출하지 않고 버전 파일이 수정된 상태로 남습니다."
 local_head=$(git rev-parse HEAD) || fail "로컬 HEAD를 읽지 못했습니다. 버전 파일은 수정된 상태로 남습니다."
 remote_head=$(git rev-parse "refs/remotes/origin/$branch") || fail "origin/$branch SHA를 읽지 못했습니다. 버전 파일은 수정된 상태로 남습니다."
 [ "$local_head" = "$expected_base" ] || fail "version-up 이후 로컬 HEAD가 preflight base에서 이동했습니다. 버전 파일은 수정된 상태로 남습니다."
@@ -68,7 +68,7 @@ set -e
 case "$remote_tag_status" in
     0) fail "원격 태그 $version이 이미 있습니다. 이동하거나 삭제하지 않고 중단합니다." ;;
     2) ;;
-    *) printf '%s\n' "$remote_tag" >&2; fail "원격 태그 $version 확인에 실패했습니다." ;;
+    *) fail "원격 태그 $version 확인에 실패했습니다. 원격 오류 원문은 URL 보호를 위해 출력하지 않습니다." ;;
 esac
 
 npm test || fail "npm test가 실패했습니다. 버전 파일은 수정된 상태로 남습니다."
@@ -100,7 +100,7 @@ set -e
 case "$remote_tag_after_test_status" in
     0) fail "npm test 중 원격 태그 $version이 생겼습니다. 이동하거나 삭제하지 않고 중단합니다." ;;
     2) ;;
-    *) printf '%s\n' "$remote_tag_after_test" >&2; fail "npm test 이후 원격 태그 $version 확인에 실패했습니다." ;;
+    *) fail "npm test 이후 원격 태그 $version 확인에 실패했습니다. 원격 오류 원문은 URL 보호를 위해 출력하지 않습니다." ;;
 esac
 
 git add -- package.json plugin.xml || fail "버전 파일 stage에 실패했습니다. 현재 인덱스 상태를 유지하고 중단합니다."
@@ -134,7 +134,7 @@ git tag -a "$version" -m "Cordova plugin $version" "$release_commit" || fail "an
 release_tag_object=$(git rev-parse "refs/tags/$version") || fail "생성된 $version 태그 object ID를 읽지 못했습니다. commit과 tag를 자동으로 되돌리지 않습니다."
 [ "$(git rev-parse "refs/heads/$branch")" = "$release_commit" ] || fail "현재 브랜치 ref가 release commit에서 이동했습니다. commit과 tag를 자동으로 되돌리지 않습니다."
 
-remote_branch_before_push=$(git ls-remote --exit-code origin "refs/heads/$branch") || fail "push 직전 원격 브랜치 SHA 조회에 실패했습니다. commit과 tag는 로컬에 남습니다."
+remote_branch_before_push=$(git ls-remote --exit-code origin "refs/heads/$branch" 2>/dev/null) || fail "push 직전 원격 브랜치 SHA 조회에 실패했습니다. 원격 URL은 노출하지 않고 commit과 tag를 로컬에 남깁니다."
 remote_branch_before_push_sha=$(printf '%s\n' "$remote_branch_before_push" | awk 'NR==1 {print $1}')
 [ "$remote_branch_before_push_sha" = "$expected_base" ] || fail "push 직전 원격 브랜치가 preflight base에서 이동했습니다. commit과 tag는 로컬에 남습니다."
 set +e
@@ -144,23 +144,23 @@ set -e
 case "$remote_tag_before_push_status" in
     0) fail "push 직전 원격 태그 $version이 생겼습니다. commit과 tag는 로컬에 남습니다." ;;
     2) ;;
-    *) printf '%s\n' "$remote_tag_before_push" >&2; fail "push 직전 원격 태그 $version 확인에 실패했습니다." ;;
+    *) fail "push 직전 원격 태그 $version 확인에 실패했습니다. 원격 오류 원문은 URL 보호를 위해 출력하지 않습니다." ;;
 esac
 
 if ! git -c push.followTags=false -c remote.origin.mirror=false push --atomic --no-follow-tags --recurse-submodules=no origin \
     "$release_commit:refs/heads/$branch" \
-    "$release_tag_object:refs/tags/$version"; then
-    fail "atomic push에 실패했습니다. 비원자적 방식으로 재시도하지 않습니다. 로컬 commit $release_commit과 태그 $version은 남습니다."
+    "$release_tag_object:refs/tags/$version" >/dev/null 2>&1; then
+    fail "atomic push에 실패했습니다. 원격 오류 원문과 URL은 출력하지 않고 비원자적 방식으로 재시도하지 않습니다. 로컬 commit $release_commit과 태그 $version은 남습니다."
 fi
 
-remote_branch_output=$(git ls-remote --exit-code origin "refs/heads/$branch") || fail "push 후 원격 브랜치 SHA 조회에 실패했습니다."
+remote_branch_output=$(git ls-remote --exit-code origin "refs/heads/$branch" 2>/dev/null) || fail "push 후 원격 브랜치 SHA 조회에 실패했습니다. 원격 URL은 출력하지 않습니다."
 remote_branch_sha=$(printf '%s\n' "$remote_branch_output" | awk 'NR==1 {print $1}')
 [ "$remote_branch_sha" = "$release_commit" ] || fail "원격 브랜치 SHA가 release commit과 다릅니다: $remote_branch_sha"
 
-remote_tag_output=$(git ls-remote --exit-code --tags origin "refs/tags/$version^{}") || fail "push 후 원격 태그 peeled SHA 조회에 실패했습니다."
+remote_tag_output=$(git ls-remote --exit-code --tags origin "refs/tags/$version^{}" 2>/dev/null) || fail "push 후 원격 태그 peeled SHA 조회에 실패했습니다. 원격 URL은 출력하지 않습니다."
 remote_tag_sha=$(printf '%s\n' "$remote_tag_output" | awk 'NR==1 {print $1}')
 [ "$remote_tag_sha" = "$release_commit" ] || fail "원격 태그 peeled SHA가 release commit과 다릅니다: $remote_tag_sha"
-remote_tag_object_output=$(git ls-remote --exit-code --tags origin "refs/tags/$version") || fail "push 후 원격 태그 object ID 조회에 실패했습니다."
+remote_tag_object_output=$(git ls-remote --exit-code --tags origin "refs/tags/$version" 2>/dev/null) || fail "push 후 원격 태그 object ID 조회에 실패했습니다. 원격 URL은 출력하지 않습니다."
 remote_tag_object=$(printf '%s\n' "$remote_tag_object_output" | awk 'NR==1 {print $1}')
 [ "$remote_tag_object" = "$release_tag_object" ] || fail "원격 태그 object ID가 로컬 annotated tag와 다릅니다: $remote_tag_object"
 

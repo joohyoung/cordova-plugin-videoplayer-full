@@ -92,6 +92,20 @@ git clone --branch main "$weird_remote" "$test_root/weird-origin" >/dev/null 2>&
     printf '%s\n' "$weird_preflight_output" | grep -Eq '^release origin fingerprint: [0-9a-f]{64}$' || fail "preflight origin fingerprint missing"
 )
 
+git clone --branch main "$test_root/origin.git" "$test_root/failing-origin" >/dev/null 2>&1
+(
+    cd "$test_root/failing-origin"
+    git remote set-url origin "$test_root/missing;credential-marker.git"
+    set +e
+    failing_preflight_output=$(sh "$preflight" 2>&1)
+    failing_preflight_status=$?
+    set -e
+    [ "$failing_preflight_status" -ne 0 ] || fail "preflight accepted an unreachable origin"
+    case "$failing_preflight_output" in
+        *credential-marker*) fail "failed preflight exposed the raw origin URL" ;;
+    esac
+)
+
 git init --bare "$test_root/second-origin.git" >/dev/null
 git clone --branch main "$test_root/origin.git" "$test_root/multi-push" >/dev/null 2>&1
 (
