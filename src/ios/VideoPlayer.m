@@ -20,6 +20,17 @@
 - (void)play:(CDVInvokedUrlCommand*)command
 {
     CDVPluginResult* pluginResult = nil;
+    BOOL respectSilentMode = NO;
+
+    if ([command.arguments count] > 1) {
+        id rawOptions = [command.arguments objectAtIndex:1];
+        if ([rawOptions isKindOfClass:[NSDictionary class]]) {
+            id rawRespectSilentMode = [(NSDictionary *)rawOptions objectForKey:@"respectSilentMode"];
+            if ([rawRespectSilentMode isKindOfClass:[NSNumber class]]) {
+                respectSilentMode = [rawRespectSilentMode boolValue];
+            }
+        }
+    }
 
     /**
      오디오 세션 설정은 AVPlayer 객체를 생성하고 사용하기 전에 별도로 이루어집니다.
@@ -28,9 +39,12 @@
      AVAudioSession은 애플리케이션 전체에서 오디오 동작을 관리하는 싱글톤 객체입니다.
      이 설정은 앱이 오디오를 재생하거나 녹음하는 방식에 대한 전반적인 맥락을 제공하며, 오디오 하드웨어의 사용법을 결정합니다.
      따라서 오디오 세션을 설정하는 것은 AVPlayer가 오디오를 재생할 때 올바른 오디오 컨텍스트가 설정되었는지를 보장하는 일반적인 단계입니다.
-     */
+    */
     NSError *sessionError = nil;
-    BOOL success = [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback error:&sessionError];
+    NSString *audioSessionCategory = respectSilentMode
+        ? AVAudioSessionCategoryAmbient
+        : AVAudioSessionCategoryPlayback;
+    BOOL success = [[AVAudioSession sharedInstance] setCategory:audioSessionCategory error:&sessionError];
     if (!success) {
         NSString *errorMessage = [NSString stringWithFormat:@"AVAudioSession setCategory error: %@", sessionError.localizedDescription];
         CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:errorMessage];
