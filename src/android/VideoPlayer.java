@@ -131,7 +131,6 @@ public class VideoPlayer extends CordovaPlugin implements OnCompletionListener, 
         final SurfaceHolder holder = surfaceView.getHolder();
 
         player = new MediaPlayer();
-        player.setOnPreparedListener(this);
         player.setOnCompletionListener(this);
         player.setOnErrorListener((mp, what, extra) -> {
             handleError("MediaPlayer 오류: " + what + ", " + extra);
@@ -164,26 +163,20 @@ public class VideoPlayer extends CordovaPlugin implements OnCompletionListener, 
         }
 
         try {
-            float requestedVolume = Float.parseFloat(options.getString("volume"));
-            boolean respectSilentMode = options.optBoolean("respectSilentMode", false);
-            int ringerMode = AudioManager.RINGER_MODE_NORMAL;
-
-            if (respectSilentMode) {
-                AudioManager audioManager = (AudioManager) cordova.getActivity()
-                        .getSystemService(Context.AUDIO_SERVICE);
-                if (audioManager != null) {
-                    ringerMode = audioManager.getRingerMode();
+            final float requestedVolume = Float.parseFloat(options.getString("volume"));
+            final boolean respectSilentMode = options.optBoolean("respectSilentMode", false);
+            player.setOnPreparedListener(mp -> {
+                try {
+                    float effectiveVolume = effectivePlaybackVolume(
+                            requestedVolume,
+                            respectSilentMode);
+                    Log.d(LOG_TAG, "setVolume: " + effectiveVolume);
+                    mp.setVolume(effectiveVolume, effectiveVolume);
+                    VideoPlayer.this.onPrepared(mp);
+                } catch (Exception e) {
+                    handleError(e.getLocalizedMessage());
                 }
-            }
-
-            float effectiveVolume = VideoPlayerAudioPolicy.effectiveVolume(
-                    requestedVolume,
-                    respectSilentMode,
-                    ringerMode,
-                    AudioManager.RINGER_MODE_SILENT,
-                    AudioManager.RINGER_MODE_VIBRATE);
-            Log.d(LOG_TAG, "setVolume: " + effectiveVolume);
-            player.setVolume(effectiveVolume, effectiveVolume);
+            });
         } catch (Exception e) {
             PluginResult result = new PluginResult(PluginResult.Status.ERROR, e.getLocalizedMessage());
             result.setKeepCallback(false); // release status callback in JS side
@@ -237,6 +230,25 @@ public class VideoPlayer extends CordovaPlugin implements OnCompletionListener, 
         lp.copyFrom(dialog.getWindow().getAttributes());
         dialog.show();
         dialog.getWindow().setAttributes(lp);
+    }
+
+    private float effectivePlaybackVolume(float requestedVolume, boolean respectSilentMode) {
+        int ringerMode = AudioManager.RINGER_MODE_NORMAL;
+        if (respectSilentMode) {
+            AudioManager audioManager = (AudioManager) cordova.getActivity()
+                    .getSystemService(Context.AUDIO_SERVICE);
+            if (audioManager == null) {
+                return 0.0f;
+            }
+            ringerMode = audioManager.getRingerMode();
+        }
+
+        return VideoPlayerAudioPolicy.effectiveVolume(
+                requestedVolume,
+                respectSilentMode,
+                ringerMode,
+                AudioManager.RINGER_MODE_SILENT,
+                AudioManager.RINGER_MODE_VIBRATE);
     }
 
     private void handleError(String errorMessage) {

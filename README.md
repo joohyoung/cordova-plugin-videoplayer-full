@@ -71,7 +71,7 @@ VideoPlayer.play(
 - `respectSilentMode`: (Optional) controls whether video audio follows the device's silent setting. The default is `false`, which preserves the existing behavior.
 
     - On iOS, `true` keeps the video playing but silences its audio while iPhone Silent Mode is on. Silent Mode is controlled by the Ring/Silent switch or, on supported iPhone models, the Action button. Haptics are configured separately. Focus and Do Not Disturb are not treated as Silent Mode by this option.
-    - On Android, `true` keeps the video playing but sets only that player's effective volume to zero while the ringer mode is Silent or Vibrate. Normal ringer mode uses the requested `volume`. The plugin does not change the device's media volume, ringer mode, or Do Not Disturb policy.
+    - On Android, `true` checks the ringer mode immediately before playback starts. Silent or Vibrate starts that video with its effective volume set to zero; Normal uses the requested `volume`. The plugin does not monitor later ringer-mode changes during the same playback and does not change the device's media volume, ringer mode, or Do Not Disturb policy.
 
 ### iOS audio session lifecycle
 
