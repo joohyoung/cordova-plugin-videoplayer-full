@@ -39,6 +39,7 @@
         </config-file>
 
         <source-file src="src/android/VideoPlayer.java" target-dir="src/com/joohyoung/cordova/videoplayer" />
+        <source-file src="src/android/VideoPlayerAudioPolicy.java" target-dir="src/com/joohyoung/cordova/videoplayer" />
 
     </platform>
 

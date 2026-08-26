@@ -2,9 +2,11 @@ package com.joohyoung.cordova.videoplayer;
 
 import android.annotation.TargetApi;
 import android.app.Dialog;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.DialogInterface.OnDismissListener;
 import android.content.res.AssetFileDescriptor;
+import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.media.MediaPlayer.OnCompletionListener;
 import android.media.MediaPlayer.OnErrorListener;
@@ -162,9 +164,26 @@ public class VideoPlayer extends CordovaPlugin implements OnCompletionListener, 
         }
 
         try {
-            float volume = Float.parseFloat(options.getString("volume"));
-            Log.d(LOG_TAG, "setVolume: " + volume);
-            player.setVolume(volume, volume);
+            float requestedVolume = Float.parseFloat(options.getString("volume"));
+            boolean respectSilentMode = options.optBoolean("respectSilentMode", false);
+            int ringerMode = AudioManager.RINGER_MODE_NORMAL;
+
+            if (respectSilentMode) {
+                AudioManager audioManager = (AudioManager) cordova.getActivity()
+                        .getSystemService(Context.AUDIO_SERVICE);
+                if (audioManager != null) {
+                    ringerMode = audioManager.getRingerMode();
+                }
+            }
+
+            float effectiveVolume = VideoPlayerAudioPolicy.effectiveVolume(
+                    requestedVolume,
+                    respectSilentMode,
+                    ringerMode,
+                    AudioManager.RINGER_MODE_SILENT,
+                    AudioManager.RINGER_MODE_VIBRATE);
+            Log.d(LOG_TAG, "setVolume: " + effectiveVolume);
+            player.setVolume(effectiveVolume, effectiveVolume);
         } catch (Exception e) {
             PluginResult result = new PluginResult(PluginResult.Status.ERROR, e.getLocalizedMessage());
             result.setKeepCallback(false); // release status callback in JS side
