@@ -65,6 +65,33 @@ git clone --branch main "$test_root/origin.git" "$test_root/ahead" >/dev/null 2>
     [ "$(node -p 'require("./package.json").version')" = "1.0.0" ] || fail "failed preflight modified the version"
 )
 
+git clone --branch main "$test_root/origin.git" "$test_root/hook" >/dev/null 2>&1
+(
+    cd "$test_root/hook"
+    git config user.name "Release Skill Test"
+    git config user.email "release-skill@example.invalid"
+    printf '%s\n' '#!/bin/sh' 'printf "%s\\n" hook-dirty >> README.md' 'git add -- README.md' > .git/hooks/pre-commit
+    chmod +x .git/hooks/pre-commit
+    node -e '
+    const fs=require("fs");
+    const pkg=JSON.parse(fs.readFileSync("package.json","utf8"));
+    pkg.version="1.1.0";
+    fs.writeFileSync("package.json",JSON.stringify(pkg)+"\n");
+    const xml=fs.readFileSync("plugin.xml","utf8").replace("version=\"1.0.0\"","version=\"1.1.0\"");
+    fs.writeFileSync("plugin.xml",xml);
+    '
+    hook_base=$(git rev-parse HEAD)
+    if sh "$publish" 1.1.0 >/dev/null 2>&1; then
+        fail "publish accepted a path added by a pre-commit hook"
+    fi
+    [ "$(git rev-parse HEAD)" != "$hook_base" ] || fail "hook rejection did not leave the release commit locally"
+    if git show-ref --verify --quiet refs/tags/1.1.0; then
+        fail "hook rejection created a release tag"
+    fi
+    [ "$(git ls-remote origin refs/heads/main | awk 'NR==1 {print $1}')" = "$hook_base" ] || fail "hook rejection changed the remote branch"
+    [ -z "$(git ls-remote origin refs/tags/1.1.0)" ] || fail "hook rejection pushed a release tag"
+)
+
 git tag -a unrelated -m unrelated
 
 node -e '

@@ -75,6 +75,32 @@ staged_files=$(git diff --cached --name-only --)
 git commit -m "Cordova 플러그인 버전 $version" -- package.json plugin.xml || fail "버전 commit에 실패했습니다. staged change를 자동으로 되돌리지 않습니다."
 release_commit=$(git rev-parse HEAD) || fail "release commit SHA를 읽지 못했습니다. commit은 로컬에 남습니다."
 
+release_parent=$(git rev-parse "$release_commit^") || fail "release commit 부모 SHA를 읽지 못했습니다. commit은 로컬에 남습니다."
+[ "$release_parent" = "$remote_head" ] || fail "release commit의 부모가 검증한 원격 HEAD와 다릅니다. commit $release_commit은 로컬에 남습니다."
+commit_files=$(git diff-tree --no-commit-id --name-only -r "$release_commit" | LC_ALL=C sort) || fail "release commit 경로를 읽지 못했습니다. commit은 로컬에 남습니다."
+[ "$commit_files" = "$expected_files" ] || fail "release commit에 package.json과 plugin.xml 이외의 경로가 포함됐습니다. commit $release_commit은 로컬에 남습니다."
+[ -z "$(git status --porcelain --untracked-files=all)" ] || fail "release commit 뒤 작업 트리 또는 인덱스가 깨끗하지 않습니다. commit $release_commit은 로컬에 남습니다."
+
+node -e '
+const childProcess=require("child_process");
+function fail(message){console.error(message);process.exit(1);}
+const commit=process.argv[1];
+const expected=process.argv[2];
+function read(path){
+    try{return childProcess.execFileSync("git",["show",commit+":"+path],{encoding:"utf8",stdio:["ignore","pipe","pipe"]});}
+    catch(error){fail("release commit에서 "+path+" 읽기 실패");}
+}
+let packageJson;
+try{packageJson=JSON.parse(read("package.json"));}catch(error){fail("release commit의 package.json 파싱 실패: "+error.message);}
+const pluginXml=read("plugin.xml");
+const tag=pluginXml.replace(/<!--[\s\S]*?-->/g,"").match(/<plugin(?=[\s>\/])[^>]*>/);
+if(!tag)fail("release commit의 plugin.xml에서 루트 <plugin> 여는 태그를 찾지 못했습니다");
+const attributes=/\s([A-Za-z_:][-\w:.]*)\s*=\s*(?:"([^"]*)"|\x27([^\x27]*)\x27)/g;
+let match,pluginVersion;
+while((match=attributes.exec(tag[0]))!==null){if(match[1]==="version"){pluginVersion=match[2]!==undefined?match[2]:match[3];break;}}
+if(packageJson.version!==expected||pluginVersion!==expected)fail("release commit의 두 버전 원본이 "+expected+"과 일치하지 않습니다");
+' -- "$release_commit" "$version" || fail "release commit의 버전 blob 검증에 실패했습니다. commit $release_commit은 로컬에 남습니다."
+
 git tag -a "$version" -m "Cordova plugin $version" || fail "annotated 태그 생성에 실패했습니다. release commit $release_commit은 로컬에 남습니다."
 [ "$(git cat-file -t "refs/tags/$version")" = "tag" ] || fail "생성된 $version 태그가 annotated tag가 아닙니다. commit과 tag를 자동으로 되돌리지 않습니다."
 
