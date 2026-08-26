@@ -3,6 +3,25 @@ var childProcess = require("child_process");
 
 require("./videoplayer.test");
 require("./ios-audio-session.test");
+require("./android-silent-mode.test");
+
+var javacResult = childProcess.spawnSync("javac", ["-version"], { stdio: "ignore" });
+if (!javacResult.error && javacResult.status === 0) {
+    var androidResult = childProcess.spawnSync(
+        "sh",
+        [path.join(__dirname, "run-android-audio-policy-tests.sh")],
+        { stdio: "inherit" }
+    );
+
+    if (androidResult.error) {
+        throw androidResult.error;
+    }
+    if (androidResult.status !== 0) {
+        process.exit(androidResult.status === null ? 1 : androidResult.status);
+    }
+} else {
+    console.log("native Android audio policy tests skipped because javac is unavailable");
+}
 
 if (process.platform === "darwin") {
     var result = childProcess.spawnSync(

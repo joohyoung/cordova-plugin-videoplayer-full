@@ -18,7 +18,8 @@
   },
   "scripts": {
     "test": "node tests/run-tests.js",
-    "test:ios": "sh tests/run-ios-audio-session-tests.sh"
+    "test:ios": "sh tests/run-ios-audio-session-tests.sh",
+    "test:android": "sh tests/run-android-audio-policy-tests.sh"
   },
   "repository": {
     "type": "git",
