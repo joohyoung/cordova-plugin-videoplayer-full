@@ -10,6 +10,8 @@ version=${1-}
 expected_branch=${2-}
 expected_base=${3-}
 expected_origin_url=${4-}
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || fail "release script 디렉터리를 확인할 수 없습니다."
+verify_version_change=$script_dir/verify-version-change.js
 printf '%s\n' "$version" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' || fail "새 버전은 안정 SemVer M.m.p 형식이어야 합니다: $version"
 printf '%s\n' "$expected_branch" | grep -Eq '^[A-Za-z0-9._/][A-Za-z0-9._/-]*$' || fail "preflight 브랜치가 안전한 형식이 아닙니다: $expected_branch"
 printf '%s\n' "$expected_base" | grep -Eq '^[0-9a-f]{40,64}$' || fail "preflight base가 Git object ID 형식이 아닙니다: $expected_base"
@@ -45,22 +47,7 @@ changed_files=$(git diff --name-only --)
 expected_files=$(printf 'package.json\nplugin.xml')
 [ "$changed_files" = "$expected_files" ] || fail "package.json과 plugin.xml 이외의 tracked change가 있거나 필수 변경이 빠졌습니다. commit하지 않고 중단합니다."
 [ -z "$(git ls-files --others --exclude-standard)" ] || fail "untracked file이 있습니다. commit하지 않고 중단합니다."
-
-node -e '
-const fs=require("fs");
-function fail(message){console.error(message);process.exit(1);}
-const expected=process.argv[1];
-let packageJson;
-try{packageJson=JSON.parse(fs.readFileSync("package.json","utf8"));}catch(error){fail("package.json 읽기/파싱 실패: "+error.message);}
-let pluginXml;
-try{pluginXml=fs.readFileSync("plugin.xml","utf8");}catch(error){fail("plugin.xml 읽기 실패: "+error.message);}
-const tag=pluginXml.replace(/<!--[\s\S]*?-->/g,"").match(/<plugin(?=[\s>\/])[^>]*>/);
-if(!tag)fail("plugin.xml에서 루트 <plugin> 여는 태그를 찾지 못했습니다");
-const attributes=/\s([A-Za-z_:][-\w:.]*)\s*=\s*(?:"([^"]*)"|\x27([^\x27]*)\x27)/g;
-let match,pluginVersion;
-while((match=attributes.exec(tag[0]))!==null){if(match[1]==="version"){pluginVersion=match[2]!==undefined?match[2]:match[3];break;}}
-if(packageJson.version!==expected||pluginVersion!==expected)fail("두 버전 원본이 새 버전 "+expected+"과 일치하지 않습니다");
-' -- "$version" || fail "버전 원본 재검증에 실패했습니다. commit하지 않고 중단합니다."
+node "$verify_version_change" "$expected_base" "$version" || fail "version 이외의 파일 변경이 있습니다. commit하지 않고 중단합니다."
 
 if git show-ref --verify --quiet "refs/tags/$version"; then
     fail "로컬 태그 $version이 이미 있습니다. 이동하거나 삭제하지 않고 중단합니다."
@@ -81,6 +68,35 @@ esac
 
 npm test || fail "npm test가 실패했습니다. 버전 파일은 수정된 상태로 남습니다."
 
+branch_after_test=$(git symbolic-ref --short HEAD 2>/dev/null) || fail "npm test 이후 HEAD가 symbolic branch가 아닙니다. commit하지 않고 중단합니다."
+[ "$branch_after_test" = "$expected_branch" ] || fail "npm test 이후 브랜치가 preflight 결과와 달라졌습니다. commit하지 않고 중단합니다."
+head_after_test=$(git rev-parse HEAD) || fail "npm test 이후 HEAD를 읽지 못했습니다. commit하지 않고 중단합니다."
+[ "$head_after_test" = "$expected_base" ] || fail "npm test 이후 HEAD가 preflight base에서 이동했습니다. commit하지 않고 중단합니다."
+upstream_after_test=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null) || fail "npm test 이후 upstream을 읽지 못했습니다. commit하지 않고 중단합니다."
+[ "$upstream_after_test" = "origin/$expected_branch" ] || fail "npm test 이후 upstream이 달라졌습니다. commit하지 않고 중단합니다."
+fetch_urls_after_test=$(git remote get-url --all origin 2>/dev/null) || fail "npm test 이후 origin fetch URL을 읽지 못했습니다. commit하지 않고 중단합니다."
+push_urls_after_test=$(git remote get-url --push --all origin 2>/dev/null) || fail "npm test 이후 origin push URL을 읽지 못했습니다. commit하지 않고 중단합니다."
+[ "$fetch_urls_after_test" = "$expected_origin_url" ] || fail "npm test 이후 origin fetch URL이 달라졌습니다. commit하지 않고 중단합니다."
+[ "$push_urls_after_test" = "$expected_origin_url" ] || fail "npm test 이후 origin push URL이 달라졌습니다. commit하지 않고 중단합니다."
+git diff --cached --quiet -- || fail "npm test 이후 staged change가 있습니다. commit하지 않고 중단합니다."
+changed_files_after_test=$(git diff --name-only --)
+[ "$changed_files_after_test" = "$expected_files" ] || fail "npm test 이후 버전 파일 이외의 tracked change가 있거나 필수 변경이 빠졌습니다. commit하지 않고 중단합니다."
+[ -z "$(git ls-files --others --exclude-standard)" ] || fail "npm test 이후 untracked file이 있습니다. commit하지 않고 중단합니다."
+node "$verify_version_change" "$expected_base" "$version" || fail "npm test 이후 version 이외의 파일 변경이 있습니다. commit하지 않고 중단합니다."
+
+if git show-ref --verify --quiet "refs/tags/$version"; then
+    fail "npm test 중 로컬 태그 $version이 생겼습니다. 이동하거나 삭제하지 않고 중단합니다."
+fi
+set +e
+remote_tag_after_test=$(git ls-remote --exit-code --tags origin "refs/tags/$version" 2>&1)
+remote_tag_after_test_status=$?
+set -e
+case "$remote_tag_after_test_status" in
+    0) fail "npm test 중 원격 태그 $version이 생겼습니다. 이동하거나 삭제하지 않고 중단합니다." ;;
+    2) ;;
+    *) printf '%s\n' "$remote_tag_after_test" >&2; fail "npm test 이후 원격 태그 $version 확인에 실패했습니다." ;;
+esac
+
 git add -- package.json plugin.xml || fail "버전 파일 stage에 실패했습니다. 현재 인덱스 상태를 유지하고 중단합니다."
 staged_files=$(git diff --cached --name-only --)
 [ "$staged_files" = "$expected_files" ] || fail "인덱스에 package.json과 plugin.xml 이외의 경로가 있습니다. commit하지 않고 중단합니다."
@@ -95,31 +111,25 @@ release_parent=$(git rev-parse "$release_commit^") || fail "release commit 부�
 commit_files=$(git diff-tree --no-commit-id --name-only -r "$release_commit" | LC_ALL=C sort) || fail "release commit 경로를 읽지 못했습니다. commit은 로컬에 남습니다."
 [ "$commit_files" = "$expected_files" ] || fail "release commit에 package.json과 plugin.xml 이외의 경로가 포함됐습니다. commit $release_commit은 로컬에 남습니다."
 [ -z "$(git status --porcelain --untracked-files=all)" ] || fail "release commit 뒤 작업 트리 또는 인덱스가 깨끗하지 않습니다. commit $release_commit은 로컬에 남습니다."
-
-node -e '
-const childProcess=require("child_process");
-function fail(message){console.error(message);process.exit(1);}
-const commit=process.argv[1];
-const expected=process.argv[2];
-function read(path){
-    try{return childProcess.execFileSync("git",["show",commit+":"+path],{encoding:"utf8",stdio:["ignore","pipe","pipe"]});}
-    catch(error){fail("release commit에서 "+path+" 읽기 실패");}
-}
-let packageJson;
-try{packageJson=JSON.parse(read("package.json"));}catch(error){fail("release commit의 package.json 파싱 실패: "+error.message);}
-const pluginXml=read("plugin.xml");
-const tag=pluginXml.replace(/<!--[\s\S]*?-->/g,"").match(/<plugin(?=[\s>\/])[^>]*>/);
-if(!tag)fail("release commit의 plugin.xml에서 루트 <plugin> 여는 태그를 찾지 못했습니다");
-const attributes=/\s([A-Za-z_:][-\w:.]*)\s*=\s*(?:"([^"]*)"|\x27([^\x27]*)\x27)/g;
-let match,pluginVersion;
-while((match=attributes.exec(tag[0]))!==null){if(match[1]==="version"){pluginVersion=match[2]!==undefined?match[2]:match[3];break;}}
-if(packageJson.version!==expected||pluginVersion!==expected)fail("release commit의 두 버전 원본이 "+expected+"과 일치하지 않습니다");
-' -- "$release_commit" "$version" || fail "release commit의 버전 blob 검증에 실패했습니다. commit $release_commit은 로컬에 남습니다."
+node "$verify_version_change" "$expected_base" "$version" "$release_commit" || fail "release commit에 version 이외의 변경이 있습니다. commit $release_commit은 로컬에 남습니다."
 
 git tag -a "$version" -m "Cordova plugin $version" "$release_commit" || fail "annotated 태그 생성에 실패했습니다. release commit $release_commit은 로컬에 남습니다."
 [ "$(git cat-file -t "refs/tags/$version")" = "tag" ] || fail "생성된 $version 태그가 annotated tag가 아닙니다. commit과 tag를 자동으로 되돌리지 않습니다."
 [ "$(git rev-parse "refs/tags/$version^{}")" = "$release_commit" ] || fail "생성된 $version 태그가 release commit을 가리키지 않습니다. commit과 tag를 자동으로 되돌리지 않습니다."
 [ "$(git rev-parse "refs/heads/$branch")" = "$release_commit" ] || fail "현재 브랜치 ref가 release commit에서 이동했습니다. commit과 tag를 자동으로 되돌리지 않습니다."
+
+remote_branch_before_push=$(git ls-remote --exit-code origin "refs/heads/$branch") || fail "push 직전 원격 브랜치 SHA 조회에 실패했습니다. commit과 tag는 로컬에 남습니다."
+remote_branch_before_push_sha=$(printf '%s\n' "$remote_branch_before_push" | awk 'NR==1 {print $1}')
+[ "$remote_branch_before_push_sha" = "$expected_base" ] || fail "push 직전 원격 브랜치가 preflight base에서 이동했습니다. commit과 tag는 로컬에 남습니다."
+set +e
+remote_tag_before_push=$(git ls-remote --exit-code --tags origin "refs/tags/$version" 2>&1)
+remote_tag_before_push_status=$?
+set -e
+case "$remote_tag_before_push_status" in
+    0) fail "push 직전 원격 태그 $version이 생겼습니다. commit과 tag는 로컬에 남습니다." ;;
+    2) ;;
+    *) printf '%s\n' "$remote_tag_before_push" >&2; fail "push 직전 원격 태그 $version 확인에 실패했습니다." ;;
+esac
 
 if ! git -c push.followTags=false -c remote.origin.mirror=false push --atomic --no-follow-tags --recurse-submodules=no origin \
     "$release_commit:refs/heads/$branch" \

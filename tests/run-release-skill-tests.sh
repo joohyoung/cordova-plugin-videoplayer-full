@@ -4,6 +4,7 @@ set -eu
 repo_root=$(git rev-parse --show-toplevel)
 preflight="$repo_root/.claude/skills/release/scripts/preflight.sh"
 publish="$repo_root/.claude/skills/release/scripts/publish.sh"
+verify_version_change="$repo_root/.claude/skills/release/scripts/verify-version-change.js"
 test_root=$(mktemp -d)
 trap 'rm -rf "$test_root"' EXIT HUP INT TERM
 
@@ -35,6 +36,7 @@ run_publish() {
 
 [ "$(readlink "$repo_root/.agents/skills/release")" = "../../.claude/skills/release" ] || fail "release skill symlink target mismatch"
 grep -q '^name: release$' "$repo_root/.claude/skills/release/SKILL.md" || fail "release skill frontmatter missing"
+[ -f "$verify_version_change" ] || fail "version-only verifier missing"
 grep -q 'push --atomic --no-follow-tags' "$publish" || fail "atomic push missing"
 if grep -E '^[[:space:]]*(if[[:space:]]+![[:space:]]+)?git .* push' "$publish" | grep -Eq -- '--follow-tags|--tags|--force'; then
     fail "publish script contains a forbidden broad or force push option"
@@ -172,6 +174,49 @@ git clone --branch main "$test_root/origin.git" "$test_root/npm-fail" >/dev/null
     fi
     [ "$(git ls-remote origin refs/heads/main | awk 'NR==1 {print $1}')" = "$npm_fail_base" ] || fail "npm failure changed the remote branch"
     [ -z "$(git ls-remote origin refs/tags/1.4.0)" ] || fail "npm failure pushed a tag"
+)
+
+git clone --branch main "$test_root/origin.git" "$test_root/extra-content" >/dev/null 2>&1
+(
+    cd "$test_root/extra-content"
+    git config user.name "Release Skill Test"
+    git config user.email "release-skill@example.invalid"
+    extra_content_base=$(git rev-parse HEAD)
+    set_fixture_version 1.5.0
+    node -e '
+    const fs=require("fs");
+    const pkg=JSON.parse(fs.readFileSync("package.json","utf8"));
+    pkg.description="unexpected";
+    fs.writeFileSync("package.json",JSON.stringify(pkg)+"\n");
+    '
+    if run_publish 1.5.0 >/dev/null 2>&1; then
+        fail "publish accepted package.json content beyond version"
+    fi
+    [ "$(git rev-parse HEAD)" = "$extra_content_base" ] || fail "extra package content created a commit"
+    if git show-ref --verify --quiet refs/tags/1.5.0; then
+        fail "extra package content created a tag"
+    fi
+)
+
+mkdir "$test_root/mutate-bin"
+printf '%s\n' '#!/bin/sh' 'printf "%s\\n" npm-mutated >> package.json' 'exit 0' > "$test_root/mutate-bin/npm"
+chmod +x "$test_root/mutate-bin/npm"
+git clone --branch main "$test_root/origin.git" "$test_root/npm-mutate" >/dev/null 2>&1
+(
+    cd "$test_root/npm-mutate"
+    git config user.name "Release Skill Test"
+    git config user.email "release-skill@example.invalid"
+    npm_mutate_base=$(git rev-parse HEAD)
+    set_fixture_version 1.6.0
+    if PATH="$test_root/mutate-bin:$PATH" run_publish 1.6.0 >/dev/null 2>&1; then
+        fail "publish accepted a successful npm test that mutated a version file"
+    fi
+    [ "$(git rev-parse HEAD)" = "$npm_mutate_base" ] || fail "npm mutation created a commit"
+    if git show-ref --verify --quiet refs/tags/1.6.0; then
+        fail "npm mutation created a tag"
+    fi
+    [ "$(git ls-remote origin refs/heads/main | awk 'NR==1 {print $1}')" = "$npm_mutate_base" ] || fail "npm mutation changed the remote branch"
+    [ -z "$(git ls-remote origin refs/tags/1.6.0)" ] || fail "npm mutation pushed a tag"
 )
 
 printf '%s\n' '#!/bin/sh' 'while read old new ref; do' '    [ "$ref" = "refs/tags/2.0.0" ] && exit 1' 'done' 'exit 0' > "$test_root/origin.git/hooks/pre-receive"

@@ -22,6 +22,7 @@ description: 이 저장소의 Cordova 플러그인 릴리스를 만든다. 명�
 4. `sh .claude/skills/release/scripts/publish.sh "{새버전}" "{브랜치}" "{base}" "{origin-url}"`을 실행한다.
    - 인자에는 `version-up`이 검증한 안정 SemVer 값만 넣는다.
    - 스크립트는 버전 원본과 변경 경계를 다시 검증하고 `npm test`를 실행한 뒤 `package.json`과 `plugin.xml`만 stage·commit한다.
+   - 두 파일은 base blob과 byte 단위로 비교해 지정된 version 필드·속성 외의 변경과 file mode 변경을 거부한다. `npm test` 뒤에도 branch, HEAD, upstream, origin URL, 작업 트리와 두 파일의 변경 경계를 다시 검증한다.
    - 같은 로컬·원격 태그가 없는 경우에만 `{새버전}` annotated 태그를 만든다.
    - 검증한 release commit SHA와 새 태그의 완전한 refspec만 `--atomic --no-follow-tags`로 push하고, 원격 브랜치 SHA와 태그 peeled SHA를 release commit과 대조한다.
 5. 이전 버전, 새 버전, release commit SHA, 태그, push 대상 브랜치, 원격 SHA 검증 결과를 요약한다.
@@ -33,6 +34,7 @@ description: 이 저장소의 Cordova 플러그인 릴리스를 만든다. 명�
 - `publish.sh`가 실패하면 비원자적 push나 force push로 재시도하지 않는다.
 - version-up 이후 실패로 남은 버전 파일, staged change, commit 또는 tag를 자동으로 되돌리거나 삭제하지 않는다. 스크립트가 보고한 현재 상태와 다음 수동 조치가 필요한 지점을 그대로 전달한다.
 - 기존 태그는 이동·삭제하지 않고 기존 `dev/*` 태그도 건드리지 않는다.
+- 저장소에 커밋된 코드와 npm lifecycle script는 신뢰된 릴리스 입력으로 취급한다. 테스트는 격리 container에서 돌지 않으므로 lifecycle script 자체의 외부 부수효과를 되돌리거나 차단하지는 않지만, 테스트가 로컬 release 상태를 바꾸면 commit 전에 중단한다.
 
 ## 책임 경계
 
