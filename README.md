@@ -43,7 +43,8 @@ VideoPlayer.play(
     "file:///android_asset/www/movie.mp4",
     {
         volume: 0.5,
-        scalingMode: VideoPlayer.SCALING_MODE.SCALE_TO_FIT_WITH_CROPPING
+        scalingMode: VideoPlayer.SCALING_MODE.SCALE_TO_FIT_WITH_CROPPING,
+        respectSilentMode: true
     },
     function () {
         console.log("video completed");
@@ -66,6 +67,10 @@ VideoPlayer.play(
     - `SCALE_TO_FIT_WITH_CROPPING`
 
     Refer to http://developer.android.com/reference/android/media/MediaPlayer.html#setVideoScalingMode(int) for more details.
+
+- `respectSilentMode`: (Optional, iOS only) controls whether video audio follows the iPhone Silent Mode setting. The default is `false`, which preserves the existing behavior and plays audio even when Silent Mode is on. When set to `true`, the video continues playing but its audio is silenced while Silent Mode is on.
+
+    Silent Mode is controlled by the Ring/Silent switch or, on supported iPhone models, the Action button. Haptics are configured separately, so video audio is silenced whether haptics are enabled or disabled in Silent Mode. Focus and Do Not Disturb are not treated as Silent Mode by this option.
 
 
 # Troubleshooting
