@@ -22,6 +22,12 @@ var playMethod = methodBody(
     "- (void)close:(CDVInvokedUrlCommand*)command;\n{"
 );
 assert(
+    playMethod.indexOf("player != nil || playerViewController != nil") <
+        playMethod.indexOf("captureBeforePlayback"),
+    "a second play must be rejected before touching the audio session snapshot"
+);
+assert(playMethod.includes("Video player is already playing or closing"));
+assert(
     playMethod.indexOf("NSString *mediaUrl") <
         playMethod.indexOf("captureBeforePlayback"),
     "media URL must be validated before changing the audio session"
@@ -46,6 +52,7 @@ assert.strictEqual(
 );
 
 assert(source.includes("notification.object != player.currentItem"));
+assert(source.includes("object:notification.object"));
 assert(source.includes("recognizer.view != playerViewController.view"));
 assert(pluginXml.includes('src="src/ios/VideoPlayerAudioSessionManager.h"'));
 assert(pluginXml.includes('src="src/ios/VideoPlayerAudioSessionManager.m"'));

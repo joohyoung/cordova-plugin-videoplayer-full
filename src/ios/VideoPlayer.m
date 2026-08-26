@@ -81,6 +81,13 @@
     CDVPluginResult* pluginResult = nil;
     BOOL respectSilentMode = NO;
 
+    if (player != nil || playerViewController != nil) {
+        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR
+                                         messageAsString:@"Video player is already playing or closing"];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+        return;
+    }
+
     if ([command.arguments count] > 1) {
         id rawOptions = [command.arguments objectAtIndex:1];
         if ([rawOptions isKindOfClass:[NSDictionary class]]) {
@@ -200,6 +207,9 @@
 - (void)playerDidFinishPlaying:(NSNotification *)notification
 {
     if (notification.object != player.currentItem) {
+        [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                        name:AVPlayerItemDidPlayToEndTimeNotification
+                                                      object:notification.object];
         return;
     }
 

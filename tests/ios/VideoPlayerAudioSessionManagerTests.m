@@ -120,6 +120,27 @@ static void TestFailedRestoreIsReportedAndDiscarded(void)
     NSCAssert(!manager.hasSnapshot, @"deferred retry belongs to the on-hold follow-up");
 }
 
+static void TestRepeatedCaptureKeepsTheOriginalHostSnapshot(void)
+{
+    FakeAudioSession *session = Session(@"Host", @"HostMode", 3, 4);
+    VideoPlayerAudioSessionManager *manager =
+        [[VideoPlayerAudioSessionManager alloc] initWithCapturesRouteSharingPolicy:YES];
+    [manager captureBeforePlayback:session];
+    session.category = @"Plugin";
+    session.mode = @"PluginMode";
+    session.options = 0;
+    session.policy = 1;
+    [manager capturePlaybackConfiguration:session];
+
+    [manager captureBeforePlayback:session];
+    NSError *error = nil;
+    NSCAssert([manager restoreSessionIfNeeded:session error:&error], @"restore failed");
+    NSCAssert([session.category isEqualToString:@"Host"], @"original category was lost");
+    NSCAssert([session.mode isEqualToString:@"HostMode"], @"original mode was lost");
+    NSCAssert(session.options == 3, @"original options were lost");
+    NSCAssert(session.policy == 4, @"original policy was lost");
+}
+
 static void TestRecapturesAfterExternalChangeBeforeNextPlayback(void)
 {
     FakeAudioSession *session = Session(@"FirstHost", @"FirstMode", 1, 2);
@@ -151,6 +172,7 @@ int main(void)
         TestRestoresEveryCapturedField();
         TestPreservesExternalChanges();
         TestFailedRestoreIsReportedAndDiscarded();
+        TestRepeatedCaptureKeepsTheOriginalHostSnapshot();
         TestRecapturesAfterExternalChangeBeforeNextPlayback();
         NSLog(@"VideoPlayerAudioSessionManager tests passed");
     }

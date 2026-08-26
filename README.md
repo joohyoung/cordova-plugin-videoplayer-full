@@ -78,6 +78,8 @@ Before playback, the plugin saves the host app's current audio session category,
 
 The restore uses a best-effort ownership check. If the current category, mode, category options, or route-sharing policy differs from the configuration captured immediately after this plugin configured playback, the plugin keeps the newer configuration instead of applying its snapshot. A restore failure is written to the native Xcode log and does not change the existing JavaScript callback timing or public API.
 
+Only one iOS video can be active at a time. A second `play` call made while the current player is playing or closing is rejected through that call's error callback, which prevents an older playback from changing the newer playback's audio-session state.
+
 
 # Development
 
