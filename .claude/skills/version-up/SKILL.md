@@ -1,6 +1,6 @@
 ---
 name: version-up
-description: 이 저장소가 배포하는 Cordova 플러그인 버전을 올린다. package.json의 version과 plugin.xml 루트 plugin 요소의 version 속성을 같은 SemVer로 동기화하고 검증한다. 사용자가 "version up", "버전 올려", "버전 업", "버전업", "$version-up"이라고 요청할 때 사용한다. 커밋·태그·push·publish·release는 하지 않는다.
+description: 이 저장소가 배포하는 Cordova 플러그인 버전을 올린다. package.json의 version과 plugin.xml 루트 plugin 요소의 version 속성을 같은 SemVer로 동기화하고 검증한다. "version up", "버전 올려", "버전 업", "버전업"을 요청받거나, "version-up", "/version-up", "$version-up"으로 호출되거나, 릴리스 절차가 major/minor/patch 증가 단위를 넘겨 호출할 때 사용한다. 커밋·태그·push·publish·release는 하지 않는다.
 ---
 
 # version-up
