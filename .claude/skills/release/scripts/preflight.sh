@@ -6,6 +6,10 @@ fail() {
     exit 1
 }
 
+fingerprint() {
+    node -e 'const crypto=require("crypto"),fs=require("fs");process.stdout.write(crypto.createHash("sha256").update(fs.readFileSync(0)).digest("hex"));'
+}
+
 repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || fail "Git 저장소 루트를 확인할 수 없습니다. 파일을 수정하지 않고 중단합니다."
 resolved_root=$(cd "$repo_root" && pwd -P) || fail "Git 저장소 루트 경로를 확인할 수 없습니다. 파일을 수정하지 않고 중단합니다."
 [ "$(pwd -P)" = "$resolved_root" ] || fail "release는 저장소 루트에서 실행해야 합니다. 파일을 수정하지 않고 중단합니다."
@@ -27,6 +31,7 @@ origin_push_urls=$(git remote get-url --push --all origin 2>/dev/null) || fail "
 [ "$(printf '%s\n' "$origin_push_urls" | wc -l | tr -d ' ')" -eq 1 ] || fail "origin push URL은 정확히 하나여야 합니다. 파일을 수정하지 않고 중단합니다."
 [ "$origin_fetch_urls" = "$origin_push_urls" ] || fail "origin fetch URL과 push URL이 다릅니다. 파일을 수정하지 않고 중단합니다."
 origin_url=$origin_fetch_urls
+origin_fingerprint=$(printf '%s' "$origin_url" | fingerprint) || fail "origin URL fingerprint 계산에 실패했습니다. 파일을 수정하지 않고 중단합니다."
 
 git fetch origin "refs/heads/$branch:refs/remotes/origin/$branch" || fail "origin/$branch fetch에 실패했습니다. 파일을 수정하지 않고 중단합니다."
 local_head=$(git rev-parse HEAD) || fail "로컬 HEAD를 읽지 못했습니다."
@@ -35,4 +40,4 @@ remote_head=$(git rev-parse "refs/remotes/origin/$branch") || fail "origin/$bran
 
 printf 'release branch: %s\n' "$branch"
 printf 'release base: %s\n' "$local_head"
-printf 'release origin URL: %s\n' "$origin_url"
+printf 'release origin fingerprint: %s\n' "$origin_fingerprint"

@@ -14,6 +14,13 @@ fail() {
 }
 
 set_fixture_version() {
+    preflight_output=$(sh "$preflight")
+    publish_branch=$(printf '%s\n' "$preflight_output" | sed -n 's/^release branch: //p')
+    publish_base=$(printf '%s\n' "$preflight_output" | sed -n 's/^release base: //p')
+    publish_origin_fingerprint=$(printf '%s\n' "$preflight_output" | sed -n 's/^release origin fingerprint: //p')
+    [ -n "$publish_branch" ] || fail "preflight branch output missing"
+    [ -n "$publish_base" ] || fail "preflight base output missing"
+    [ -n "$publish_origin_fingerprint" ] || fail "preflight origin fingerprint output missing"
     node -e '
     const fs=require("fs");
     const version=process.argv[1];
@@ -28,10 +35,7 @@ set_fixture_version() {
 
 run_publish() {
     publish_version=$1
-    publish_branch=$(git symbolic-ref --short HEAD)
-    publish_base=$(git rev-parse HEAD)
-    publish_origin_url=$(git remote get-url origin)
-    sh "$publish" "$publish_version" "$publish_branch" "$publish_base" "$publish_origin_url"
+    sh "$publish" "$publish_version" "$publish_branch" "$publish_base" "$publish_origin_fingerprint"
 }
 
 [ "$(readlink "$repo_root/.agents/skills/release")" = "../../.claude/skills/release" ] || fail "release skill symlink target mismatch"
@@ -75,6 +79,18 @@ if sh "$preflight" >/dev/null 2>&1; then
     fail "preflight accepted a mismatched upstream"
 fi
 git config branch.main.merge refs/heads/main
+
+weird_remote="$test_root/origin;credential-marker.git"
+git clone --bare "$test_root/origin.git" "$weird_remote" >/dev/null 2>&1
+git clone --branch main "$weird_remote" "$test_root/weird-origin" >/dev/null 2>&1
+(
+    cd "$test_root/weird-origin"
+    weird_preflight_output=$(sh "$preflight")
+    case "$weird_preflight_output" in
+        *credential-marker*) fail "preflight exposed the raw origin URL" ;;
+    esac
+    printf '%s\n' "$weird_preflight_output" | grep -Eq '^release origin fingerprint: [0-9a-f]{64}$' || fail "preflight origin fingerprint missing"
+)
 
 git init --bare "$test_root/second-origin.git" >/dev/null
 git clone --branch main "$test_root/origin.git" "$test_root/multi-push" >/dev/null 2>&1
@@ -120,6 +136,23 @@ git clone --branch main "$test_root/origin.git" "$test_root/hook" >/dev/null 2>&
     [ -z "$(git ls-remote origin refs/tags/1.1.0)" ] || fail "hook rejection pushed a release tag"
 )
 
+git clone --branch main "$test_root/origin.git" "$test_root/stale-preflight" >/dev/null 2>&1
+(
+    cd "$test_root/stale-preflight"
+    git config user.name "Release Skill Test"
+    git config user.email "release-skill@example.invalid"
+    stale_base=$(git rev-parse HEAD)
+    set_fixture_version 1.1.1
+    git remote set-url --push origin changed.invalid
+    if run_publish 1.1.1 >/dev/null 2>&1; then
+        fail "publish accepted origin state that differs from preflight"
+    fi
+    [ "$(git rev-parse HEAD)" = "$stale_base" ] || fail "stale preflight input created a commit"
+    if git show-ref --verify --quiet refs/tags/1.1.1; then
+        fail "stale preflight input created a tag"
+    fi
+)
+
 git clone --branch main "$test_root/origin.git" "$test_root/local-tag" >/dev/null 2>&1
 (
     cd "$test_root/local-tag"
@@ -135,6 +168,26 @@ git clone --branch main "$test_root/origin.git" "$test_root/local-tag" >/dev/nul
     [ "$(git rev-parse 'refs/tags/1.2.0^{}')" = "$local_tag_base" ] || fail "local tag collision moved the tag"
     [ "$(git ls-remote origin refs/heads/main | awk 'NR==1 {print $1}')" = "$local_tag_base" ] || fail "local tag collision changed the remote branch"
     [ -z "$(git ls-remote origin refs/tags/1.2.0)" ] || fail "local tag collision pushed the tag"
+)
+
+git clone --branch main "$test_root/origin.git" "$test_root/post-commit" >/dev/null 2>&1
+(
+    cd "$test_root/post-commit"
+    git config user.name "Release Skill Test"
+    git config user.email "release-skill@example.invalid"
+    printf '%s\n' '#!/bin/sh' 'git remote set-url --push origin changed.invalid' > .git/hooks/post-commit
+    chmod +x .git/hooks/post-commit
+    post_commit_base=$(git rev-parse HEAD)
+    set_fixture_version 1.2.1
+    if run_publish 1.2.1 >/dev/null 2>&1; then
+        fail "publish accepted an origin URL changed by a post-commit hook"
+    fi
+    [ "$(git rev-parse HEAD)" != "$post_commit_base" ] || fail "post-commit rejection did not leave the release commit locally"
+    if git show-ref --verify --quiet refs/tags/1.2.1; then
+        fail "post-commit rejection created a release tag"
+    fi
+    [ "$(git ls-remote "$test_root/origin.git" refs/heads/main | awk 'NR==1 {print $1}')" = "$post_commit_base" ] || fail "post-commit rejection changed the original remote branch"
+    [ -z "$(git ls-remote "$test_root/origin.git" refs/tags/1.2.1)" ] || fail "post-commit rejection pushed a release tag"
 )
 
 git tag -a 1.3.0 -m "existing remote tag"
@@ -198,6 +251,23 @@ git clone --branch main "$test_root/origin.git" "$test_root/extra-content" >/dev
     fi
 )
 
+git clone --branch main "$test_root/origin.git" "$test_root/mode-change" >/dev/null 2>&1
+(
+    cd "$test_root/mode-change"
+    git config user.name "Release Skill Test"
+    git config user.email "release-skill@example.invalid"
+    mode_change_base=$(git rev-parse HEAD)
+    set_fixture_version 1.5.1
+    chmod +x package.json
+    if run_publish 1.5.1 >/dev/null 2>&1; then
+        fail "publish accepted a version file mode change"
+    fi
+    [ "$(git rev-parse HEAD)" = "$mode_change_base" ] || fail "file mode change created a commit"
+    if git show-ref --verify --quiet refs/tags/1.5.1; then
+        fail "file mode change created a tag"
+    fi
+)
+
 mkdir "$test_root/mutate-bin"
 printf '%s\n' '#!/bin/sh' 'printf "%s\\n" npm-mutated >> package.json' 'exit 0' > "$test_root/mutate-bin/npm"
 chmod +x "$test_root/mutate-bin/npm"
@@ -247,7 +317,9 @@ set_fixture_version 1.1.0
 
 run_publish 1.1.0 >/dev/null
 release_commit=$(git rev-parse HEAD)
+release_tag_object=$(git rev-parse refs/tags/1.1.0)
 [ "$(git ls-remote origin refs/heads/main | awk 'NR==1 {print $1}')" = "$release_commit" ] || fail "remote branch SHA mismatch"
+[ "$(git ls-remote origin refs/tags/1.1.0 | awk 'NR==1 {print $1}')" = "$release_tag_object" ] || fail "remote tag object ID mismatch"
 [ "$(git ls-remote origin 'refs/tags/1.1.0^{}' | awk 'NR==1 {print $1}')" = "$release_commit" ] || fail "remote tag peeled SHA mismatch"
 [ -z "$(git ls-remote origin refs/tags/unrelated)" ] || fail "unrelated annotated tag was pushed"
 

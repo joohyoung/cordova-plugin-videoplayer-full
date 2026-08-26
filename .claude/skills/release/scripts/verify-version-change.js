@@ -47,7 +47,7 @@ function indexMode(file) {
     if (!stat.isFile() || stat.isSymbolicLink()) {
         fail("작업 트리의 " + file + "이 regular file이 아닙니다");
     }
-    return match[1];
+    return (stat.mode & 0o111) === 0 ? "100644" : "100755";
 }
 
 function stringTokenEnd(text, start) {
@@ -143,6 +143,11 @@ var basePackage = readBlob(base, "package.json");
 var targetPackage = targetCommit ? readBlob(targetCommit, "package.json") : fs.readFileSync("package.json", "utf8");
 var basePackageRange = packageVersionRange(basePackage);
 var basePackageVersion = JSON.parse(basePackage.slice(basePackageRange.start, basePackageRange.end));
+if (!/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(basePackageVersion)) fail("base package.json 버전 형식이 올바르지 않습니다");
+var previousParts = basePackageVersion.split(".").map(Number);
+var nextParts = expectedVersion.split(".").map(Number);
+var comparison = (nextParts[0] - previousParts[0]) || (nextParts[1] - previousParts[1]) || (nextParts[2] - previousParts[2]);
+if (!(comparison > 0)) fail("새 버전이 base 버전보다 크지 않습니다");
 var expectedPackage = replaceRange(basePackage, basePackageRange, JSON.stringify(expectedVersion));
 if (targetPackage !== expectedPackage) fail("package.json은 최상위 version 이외의 내용도 변경됐습니다");
 
@@ -154,6 +159,5 @@ if (basePluginVersion !== basePackageVersion) fail("base의 두 버전 원본이
 var expectedPlugin = replaceRange(basePlugin, basePluginRange, expectedVersion);
 if (targetPlugin !== expectedPlugin) fail("plugin.xml은 루트 plugin version 이외의 내용도 변경됐습니다");
 
-if (basePackageVersion === expectedVersion) fail("새 버전이 base package.json 버전과 같습니다");
 JSON.parse(targetPackage);
 console.log("version-only change verified: " + basePackageVersion + " -> " + expectedVersion);
