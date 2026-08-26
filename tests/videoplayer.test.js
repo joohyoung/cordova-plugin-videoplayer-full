@@ -51,4 +51,20 @@ assert.strictEqual(silentModeOptions.respectSilentMode, true);
 assert.strictEqual(silentModeOptions.volume, 0.5);
 assert.strictEqual(silentModeOptions.scalingMode, 1);
 
+var consecutiveCalls = loadVideoPlayer();
+consecutiveCalls.videoPlayer.play("file:///movie.mp4", {
+    respectSilentMode: true
+});
+consecutiveCalls.videoPlayer.play("file:///movie.mp4", {
+    respectSilentMode: false
+});
+consecutiveCalls.videoPlayer.play("file:///movie.mp4", {
+    respectSilentMode: true
+});
+
+assert.strictEqual(consecutiveCalls.calls.length, 3);
+assert.strictEqual(consecutiveCalls.calls[0][4][1].respectSilentMode, true);
+assert.strictEqual(consecutiveCalls.calls[1][4][1].respectSilentMode, false);
+assert.strictEqual(consecutiveCalls.calls[2][4][1].respectSilentMode, true);
+
 console.log("videoplayer option tests passed");
