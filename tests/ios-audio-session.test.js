@@ -6,6 +6,7 @@ var source = fs.readFileSync(
     path.join(__dirname, "../src/ios/VideoPlayer.m"),
     "utf8"
 );
+var pluginXml = fs.readFileSync(path.join(__dirname, "../plugin.xml"), "utf8");
 
 function methodBody(startMarker, endMarker) {
     var start = source.indexOf(startMarker);
@@ -22,49 +23,19 @@ var playMethod = methodBody(
 );
 assert(
     playMethod.indexOf("NSString *mediaUrl") <
-        playMethod.indexOf("captureAudioSessionBeforePlayback"),
+        playMethod.indexOf("captureBeforePlayback"),
     "media URL must be validated before changing the audio session"
 );
 assert(playMethod.includes("AVAudioSessionCategoryAmbient"));
 assert(playMethod.includes("AVAudioSessionCategoryPlayback"));
-assert(playMethod.includes("capturePlaybackAudioSessionConfiguration"));
+assert(playMethod.includes("capturePlaybackConfiguration"));
 assert(playMethod.includes("restoreAudioSessionIfNeeded"));
-
-var snapshotMethod = methodBody(
-    "- (void)captureAudioSessionBeforePlayback:(AVAudioSession *)audioSession\n{",
-    "- (void)capturePlaybackAudioSessionConfiguration:(AVAudioSession *)audioSession\n{"
-);
-assert(snapshotMethod.includes("audioSessionMatchesPlaybackConfiguration"));
-assert(snapshotMethod.includes("discardAudioSessionSnapshot"));
-[
-    "audioSession.category",
-    "audioSession.mode",
-    "audioSession.categoryOptions",
-    "audioSession.routeSharingPolicy"
-].forEach(function (value) {
-    assert(snapshotMethod.includes(value), "snapshot must include " + value);
-});
-
-var ownershipMethod = methodBody(
-    "- (BOOL)audioSessionMatchesPlaybackConfiguration:(AVAudioSession *)audioSession\n{",
-    "- (void)restoreAudioSessionIfNeeded\n{"
-);
-[
-    "audioSessionCategoryForPlayback",
-    "audioSessionModeForPlayback",
-    "audioSessionOptionsForPlayback",
-    "audioSessionRouteSharingPolicyForPlayback"
-].forEach(function (value) {
-    assert(ownershipMethod.includes(value), "ownership check must include " + value);
-});
 
 var restoreMethod = methodBody(
     "- (void)restoreAudioSessionIfNeeded\n{",
-    "- (void)discardAudioSessionSnapshot\n{"
+    "- (VideoPlayerAudioSessionManager *)audioSessionManager\n{"
 );
-assert(restoreMethod.includes("audioSessionMatchesPlaybackConfiguration"));
-assert(restoreMethod.includes("routeSharingPolicy:audioSessionRouteSharingPolicyBeforePlayback"));
-assert(restoreMethod.includes("options:audioSessionOptionsBeforePlayback"));
+assert(restoreMethod.includes("restoreSessionIfNeeded"));
 assert(restoreMethod.includes("AVAudioSession restore configuration error"));
 
 var restoreCalls = source.match(/\[self restoreAudioSessionIfNeeded\]/g) || [];
@@ -73,5 +44,8 @@ assert.strictEqual(
     4,
     "restore must run for activation failure, close, completion, and tap"
 );
+
+assert(pluginXml.includes('src="src/ios/VideoPlayerAudioSessionManager.h"'));
+assert(pluginXml.includes('src="src/ios/VideoPlayerAudioSessionManager.m"'));
 
 console.log("iOS audio session source contract tests passed");
