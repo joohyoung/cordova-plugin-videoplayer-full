@@ -92,6 +92,8 @@ This repository ships a `version-up` agent skill that bumps both values together
 
 The skill source lives at `.claude/skills/version-up/SKILL.md`, and `.agents/skills/version-up` is a repository-relative symlink to that same directory so Claude Code and Codex both read one copy. See the **"이 스킬이 두 경로에 있는 이유"** section of that file for the discovery paths and invocation forms of each product — they are documented there only, so that a correction lands in one place. Edit only `.claude/skills/version-up/SKILL.md`.
 
+Use the separate `release` skill only when the version change should also be committed, tagged, and pushed. It runs `version-up`, commits only `package.json` and `plugin.xml`, creates an annotated tag named after the new version, and atomically pushes the explicit current-branch and tag refs. It does not use `--follow-tags`, publish to npm, create a GitHub release, or write a CHANGELOG. Its shared source is `.claude/skills/release`, with `.agents/skills/release` pointing to the same directory.
+
 
 # Troubleshooting
 

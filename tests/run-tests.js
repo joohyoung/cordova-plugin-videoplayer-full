@@ -5,6 +5,19 @@ require("./videoplayer.test");
 require("./ios-audio-session.test");
 require("./android-silent-mode.test");
 
+var releaseResult = childProcess.spawnSync(
+    "sh",
+    [path.join(__dirname, "run-release-skill-tests.sh")],
+    { stdio: "inherit" }
+);
+
+if (releaseResult.error) {
+    throw releaseResult.error;
+}
+if (releaseResult.status !== 0) {
+    process.exit(releaseResult.status === null ? 1 : releaseResult.status);
+}
+
 var javacResult = childProcess.spawnSync("javac", ["-version"], { stdio: "ignore" });
 if (!javacResult.error && javacResult.status === 0) {
     var androidResult = childProcess.spawnSync(
