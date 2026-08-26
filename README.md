@@ -73,6 +73,17 @@ VideoPlayer.play(
     Silent Mode is controlled by the Ring/Silent switch or, on supported iPhone models, the Action button. Haptics are configured separately, so video audio is silenced whether haptics are enabled or disabled in Silent Mode. Focus and Do Not Disturb are not treated as Silent Mode by this option.
 
 
+# Development
+
+## Bumping the plugin version
+
+The published plugin version is stored in two places that must always match: the `version` field in `package.json` and the `version` attribute on the root `<plugin>` element in `plugin.xml`.
+
+This repository ships a `version-up` agent skill that bumps both values together. It **refuses to proceed if the two files already disagree**, rather than guessing which one is correct, and it likewise stops if the current version is not a stable SemVer `M.m.p`. Given an increment unit (`major`/`minor`/`patch`) or an explicit version it uses that directly; with no argument it proposes candidates and asks. After updating both files it re-reads them and runs `npm test`. It never commits, tags, pushes, publishes, or creates a release.
+
+The skill source lives at `.claude/skills/version-up/SKILL.md`, and `.agents/skills/version-up` is a repository-relative symlink to that same directory so Claude Code and Codex both read one copy. See the **"이 스킬이 두 경로에 있는 이유"** section of that file for the discovery paths and invocation forms of each product — they are documented there only, so that a correction lands in one place. Edit only `.claude/skills/version-up/SKILL.md`.
+
+
 # Troubleshooting
 
 **When playing a video for the first time, everything works great. when calling .close() function the video closes great. 2nd time around, the .play() is called the same way as the first time. The video plays fine for the second time. Now when trying to close it before the video ends, the app fatally crash.**
