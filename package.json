@@ -17,7 +17,7 @@
     }
   },
   "scripts": {
-    "test": "node tests/videoplayer.test.js"
+    "test": "node tests/videoplayer.test.js && node tests/ios-audio-session.test.js"
   },
   "repository": {
     "type": "git",

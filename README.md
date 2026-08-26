@@ -72,6 +72,12 @@ VideoPlayer.play(
 
     Silent Mode is controlled by the Ring/Silent switch or, on supported iPhone models, the Action button. Haptics are configured separately, so video audio is silenced whether haptics are enabled or disabled in Silent Mode. Focus and Do Not Disturb are not treated as Silent Mode by this option.
 
+### iOS audio session lifecycle
+
+Before playback, the plugin saves the host app's current audio session category, mode, category options, and route-sharing policy. It restores that configuration when playback finishes, the video is tapped, `close` is called, or audio-session activation fails.
+
+The restore is ownership-safe: if the host app or another plugin changes the audio session while the video is playing, this plugin keeps the newer configuration instead of overwriting it with its snapshot. A restore failure is written to the native Xcode log and does not change the existing JavaScript callback timing or public API.
+
 
 # Development
 
