@@ -27,24 +27,55 @@ description: 이 저장소가 배포하는 Cordova 플러그인 버전을 올린
 
 ### 1. 현재 버전 읽기
 
-저장소 루트에서 두 값을 각각 읽는다.
+저장소 루트에서 아래 명령을 실행한다. 두 원본을 함께 읽어 `package.json`과 `plugin.xml` 값을 탭으로 구분해 낸다.
 
 ```bash
-node -p "require('./package.json').version"
+node -e '
+const fs=require("fs");
+function fail(m){console.error(m);process.exit(1);}
+let p;
+try{p=JSON.parse(fs.readFileSync("package.json","utf8"));}catch(e){fail("package.json 읽기/파싱 실패: "+e.message);}
+const pv=p.version;
+if(typeof pv!=="string"||pv==="")fail("package.json의 최상위 version 필드가 비었거나 문자열이 아닙니다");
+let x;
+try{x=fs.readFileSync("plugin.xml","utf8");}catch(e){fail("plugin.xml 읽기 실패: "+e.message);}
+const t=x.replace(/<!--[\s\S]*?-->/g,"").match(/<plugin(?=[\s>\/])[^>]*>/);
+if(!t)fail("plugin.xml에서 루트 <plugin> 여는 태그를 찾지 못했습니다");
+const a=t[0].match(/\sversion\s*=\s*(?:"([^"]*)"|\x27([^\x27]*)\x27)/);
+if(!a)fail("plugin.xml 루트 <plugin>에 version 속성이 없습니다");
+const xv=a[1]!==undefined?a[1]:a[2];
+if(xv==="")fail("plugin.xml 루트 <plugin>의 version 속성이 비어 있습니다");
+console.log("package.json\t"+pv);
+console.log("plugin.xml\t"+xv);
+'
 ```
 
-```bash
-node -e "const m=require('fs').readFileSync('plugin.xml','utf8').match(/<plugin\b[^>]*?\sversion=\"([^\"]*)\"/); if(!m){console.error('plugin.xml 루트 <plugin>에서 version 속성을 찾지 못했습니다'); process.exit(1);} console.log(m[1]);"
-```
+이 명령이 지키는 것:
 
-- 정규식이 파일에서 처음 나오는 `<plugin` 여는 태그를 잡으므로 루트 요소의 `version`만 읽는다.
-- 어느 한쪽이라도 비정상 종료하면 읽지 못한 파일과 그 출력을 보고하고 **파일을 수정하지 않은 채 중단한다.**
+- **주석과 중첩 태그를 먼저 걷어 낸다.** XML 주석을 제거한 뒤 첫 `<plugin` **여는 태그 안에서만** `version`을 찾는다. 주석 처리된 `<!-- <plugin version="0.0.1"> -->`나 중첩된 `<plugin version="9.9.9"/>`의 값을 루트 값으로 잘못 읽지 않으며, 루트 태그에 `version`이 없으면 다른 태그로 넘어가지 않고 종료 코드 1로 끝난다.
+- **큰따옴표와 작은따옴표를 모두 인식한다.** XML은 둘 다 허용하므로 어느 쪽이든 읽는다(스크립트를 작은따옴표 셸 문자열로 감쌀 수 있도록 정규식 안에서는 `\x27`로 적었다).
+- **빈 값을 성공으로 읽지 않는다.** `version` 필드가 없거나(`undefined`), `null`이거나, 빈 문자열이거나, `version=""` 빈 속성이면 모두 종료 코드 1로 끝난다. 종료 코드만 보는 판정이 빈 출력을 정상으로 오독하지 않게 하려는 것이다.
+- **스크립트를 작은따옴표로 감싼다.** 큰따옴표로 감싸면 `$`와 백틱이 셸에 먼저 해석되어 정규식 끝 앵커가 깨지거나 파일에서 읽은 값이 명령으로 실행될 수 있다. 이 스킬은 서로 다른 에이전트에서 실행되므로 셸 이스케이프에 의존하지 않는다.
+
+처리:
+
+- **비정상 종료하면** 그 출력을 그대로 보고하고 **파일을 수정하지 않은 채 중단한다.**
 - 읽은 두 값을 각각 `{현재-package}`, `{현재-plugin}`으로 기록한다.
 
-### 2. 두 원본의 현재 버전 일치 확인
+### 2. 두 원본의 현재 버전 일치·형식 확인
 
-- `{현재-package}`와 `{현재-plugin}`이 다르면 **파일을 수정하지 않고** 두 값과 각 파일 경로를 보고한 뒤 중단한다. 어느 쪽이 옳은지 이 스킬이 추측해 맞추지 않는다.
-- 같으면 그 값을 `{현재버전}`으로 기록하고 다음 단계로 간다.
+1단계와 같은 방식으로 두 값을 다시 읽어 비교와 형식 검증까지 한 번에 수행한다. 1단계 스크립트 끝의 두 `console.log` 줄을 아래로 바꿔 실행한다.
+
+```bash
+const SEMVER=/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
+if(pv!==xv)fail("두 원본의 현재 버전이 다릅니다 (package.json="+pv+", plugin.xml="+xv+"). 파일을 수정하지 않고 중단합니다");
+if(!SEMVER.test(pv))fail("현재 버전 "+pv+"은(는) 안정 버전 SemVer M.m.p가 아닙니다. 두 파일의 현재 값을 먼저 바로잡으십시오");
+console.log(pv);
+```
+
+- **두 값이 다르면** 파일을 수정하지 않고 두 값과 각 파일 경로를 보고한 뒤 중단한다. 어느 쪽이 옳은지 이 스킬이 추측해 맞추지 않는다.
+- **현재 버전이 `M.m.p` 형식이 아니면** 파일을 수정하지 않고 중단한다. 두 파일이 똑같이 `1.0.6-beta.1`처럼 적혀 있어도 여기서 걸린다 — 이 검사가 없으면 4단계의 수치 비교가 `NaN`을 내고 `NaN <= 0`이 `false`라 **다운그레이드가 통과한다.** 3단계의 patch/minor/major 후보 계산도 `M.m.p`가 아니면 정의되지 않는다.
+- 두 검사를 지나면 그 값을 `{현재버전}`으로 기록하고 다음 단계로 간다.
 
 ### 3. 새 버전 정하기
 
