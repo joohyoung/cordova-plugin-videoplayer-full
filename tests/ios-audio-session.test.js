@@ -45,6 +45,8 @@ assert.strictEqual(
     "restore must run for activation failure, close, completion, and tap"
 );
 
+assert(source.includes("notification.object != player.currentItem"));
+assert(source.includes("recognizer.view != playerViewController.view"));
 assert(pluginXml.includes('src="src/ios/VideoPlayerAudioSessionManager.h"'));
 assert(pluginXml.includes('src="src/ios/VideoPlayerAudioSessionManager.m"'));
 

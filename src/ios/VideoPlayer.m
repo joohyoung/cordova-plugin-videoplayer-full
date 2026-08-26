@@ -199,6 +199,10 @@
 // 영상 재생이 끝난 후에 호출될 메서드
 - (void)playerDidFinishPlaying:(NSNotification *)notification
 {
+    if (notification.object != player.currentItem) {
+        return;
+    }
+
     // 옵저버 제거
     [[NSNotificationCenter defaultCenter] removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:nil];
     [self restoreAudioSessionIfNeeded];
@@ -212,6 +216,10 @@
 
 // 영상 탭 시 호출될 메서드
 - (void)handleVideoTap:(UITapGestureRecognizer *)recognizer {
+    if (recognizer.view != playerViewController.view) {
+        return;
+    }
+
     // 재생을 멈추고
     [player pause];
     [self restoreAudioSessionIfNeeded];
