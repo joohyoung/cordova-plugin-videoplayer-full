@@ -36,7 +36,7 @@ origin_fingerprint=$(printf '%s' "$origin_url" | fingerprint) || fail "origin UR
 git fetch origin "refs/heads/$branch:refs/remotes/origin/$branch" >/dev/null 2>&1 || fail "origin/$branch fetch에 실패했습니다. 원격 URL은 노출하지 않고 파일을 수정하지 않은 채 중단합니다."
 local_head=$(git rev-parse HEAD) || fail "로컬 HEAD를 읽지 못했습니다."
 remote_head=$(git rev-parse "refs/remotes/origin/$branch") || fail "origin/$branch SHA를 읽지 못했습니다."
-[ "$local_head" = "$remote_head" ] || fail "로컬 HEAD와 origin/$branch가 다릅니다. 파일을 수정하지 않고 중단합니다."
+[ "$local_head" = "$remote_head" ] || fail "로컬 HEAD와 origin/${branch}가 다릅니다. 파일을 수정하지 않고 중단합니다."
 
 printf 'release branch: %s\n' "$branch"
 printf 'release base: %s\n' "$local_head"

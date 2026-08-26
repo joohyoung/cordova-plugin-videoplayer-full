@@ -55,7 +55,7 @@ expected_files=$(printf 'package.json\nplugin.xml')
 node "$verify_version_change" "$expected_base" "$version" || fail "version 이외의 파일 변경이 있습니다. commit하지 않고 중단합니다."
 
 if git show-ref --verify --quiet "refs/tags/$version"; then
-    fail "로컬 태그 $version이 이미 있습니다. 이동하거나 삭제하지 않고 중단합니다."
+    fail "로컬 태그 ${version}이 이미 있습니다. 이동하거나 삭제하지 않고 중단합니다."
 else
     tag_status=$?
     [ "$tag_status" -eq 1 ] || fail "로컬 태그 $version 확인에 실패했습니다."
@@ -66,7 +66,7 @@ remote_tag=$(git ls-remote --exit-code --tags origin "refs/tags/$version" 2>&1)
 remote_tag_status=$?
 set -e
 case "$remote_tag_status" in
-    0) fail "원격 태그 $version이 이미 있습니다. 이동하거나 삭제하지 않고 중단합니다." ;;
+    0) fail "원격 태그 ${version}이 이미 있습니다. 이동하거나 삭제하지 않고 중단합니다." ;;
     2) ;;
     *) fail "원격 태그 $version 확인에 실패했습니다. 원격 오류 원문은 URL 보호를 위해 출력하지 않습니다." ;;
 esac
@@ -91,14 +91,14 @@ changed_files_after_test=$(git diff --name-only --)
 node "$verify_version_change" "$expected_base" "$version" || fail "npm test 이후 version 이외의 파일 변경이 있습니다. commit하지 않고 중단합니다."
 
 if git show-ref --verify --quiet "refs/tags/$version"; then
-    fail "npm test 중 로컬 태그 $version이 생겼습니다. 이동하거나 삭제하지 않고 중단합니다."
+    fail "npm test 중 로컬 태그 ${version}이 생겼습니다. 이동하거나 삭제하지 않고 중단합니다."
 fi
 set +e
 remote_tag_after_test=$(git ls-remote --exit-code --tags origin "refs/tags/$version" 2>&1)
 remote_tag_after_test_status=$?
 set -e
 case "$remote_tag_after_test_status" in
-    0) fail "npm test 중 원격 태그 $version이 생겼습니다. 이동하거나 삭제하지 않고 중단합니다." ;;
+    0) fail "npm test 중 원격 태그 ${version}이 생겼습니다. 이동하거나 삭제하지 않고 중단합니다." ;;
     2) ;;
     *) fail "npm test 이후 원격 태그 $version 확인에 실패했습니다. 원격 오류 원문은 URL 보호를 위해 출력하지 않습니다." ;;
 esac
@@ -113,11 +113,11 @@ git commit -m "Cordova 플러그인 버전 $version" -- package.json plugin.xml 
 release_commit=$(git rev-parse HEAD) || fail "release commit SHA를 읽지 못했습니다. commit은 로컬에 남습니다."
 
 release_parent=$(git rev-parse "$release_commit^") || fail "release commit 부모 SHA를 읽지 못했습니다. commit은 로컬에 남습니다."
-[ "$release_parent" = "$remote_head" ] || fail "release commit의 부모가 검증한 원격 HEAD와 다릅니다. commit $release_commit은 로컬에 남습니다."
+[ "$release_parent" = "$remote_head" ] || fail "release commit의 부모가 검증한 원격 HEAD와 다릅니다. commit ${release_commit}은 로컬에 남습니다."
 commit_files=$(git diff-tree --no-commit-id --name-only -r "$release_commit" | LC_ALL=C sort) || fail "release commit 경로를 읽지 못했습니다. commit은 로컬에 남습니다."
-[ "$commit_files" = "$expected_files" ] || fail "release commit에 package.json과 plugin.xml 이외의 경로가 포함됐습니다. commit $release_commit은 로컬에 남습니다."
-[ -z "$(git status --porcelain --untracked-files=all)" ] || fail "release commit 뒤 작업 트리 또는 인덱스가 깨끗하지 않습니다. commit $release_commit은 로컬에 남습니다."
-node "$verify_version_change" "$expected_base" "$version" "$release_commit" || fail "release commit에 version 이외의 변경이 있습니다. commit $release_commit은 로컬에 남습니다."
+[ "$commit_files" = "$expected_files" ] || fail "release commit에 package.json과 plugin.xml 이외의 경로가 포함됐습니다. commit ${release_commit}은 로컬에 남습니다."
+[ -z "$(git status --porcelain --untracked-files=all)" ] || fail "release commit 뒤 작업 트리 또는 인덱스가 깨끗하지 않습니다. commit ${release_commit}은 로컬에 남습니다."
+node "$verify_version_change" "$expected_base" "$version" "$release_commit" || fail "release commit에 version 이외의 변경이 있습니다. commit ${release_commit}은 로컬에 남습니다."
 branch_after_commit=$(git symbolic-ref --short HEAD 2>/dev/null) || fail "release commit 뒤 HEAD가 symbolic branch가 아닙니다. commit은 로컬에 남습니다."
 [ "$branch_after_commit" = "$expected_branch" ] || fail "release commit 뒤 브랜치가 preflight 결과와 다릅니다. commit은 로컬에 남습니다."
 upstream_after_commit=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null) || fail "release commit 뒤 upstream을 읽지 못했습니다. commit은 로컬에 남습니다."
@@ -128,7 +128,7 @@ push_urls_after_commit=$(git remote get-url --push --all origin 2>/dev/null) || 
 fingerprint_after_commit=$(printf '%s' "$fetch_urls_after_commit" | fingerprint) || fail "release commit 뒤 origin URL fingerprint 계산에 실패했습니다. commit은 로컬에 남습니다."
 [ "$fingerprint_after_commit" = "$expected_origin_fingerprint" ] || fail "release commit 뒤 origin URL fingerprint가 달라졌습니다. commit은 로컬에 남습니다."
 
-git tag -a "$version" -m "Cordova plugin $version" "$release_commit" || fail "annotated 태그 생성에 실패했습니다. release commit $release_commit은 로컬에 남습니다."
+git tag -a "$version" -m "Cordova plugin $version" "$release_commit" || fail "annotated 태그 생성에 실패했습니다. release commit ${release_commit}은 로컬에 남습니다."
 [ "$(git cat-file -t "refs/tags/$version")" = "tag" ] || fail "생성된 $version 태그가 annotated tag가 아닙니다. commit과 tag를 자동으로 되돌리지 않습니다."
 [ "$(git rev-parse "refs/tags/$version^{}")" = "$release_commit" ] || fail "생성된 $version 태그가 release commit을 가리키지 않습니다. commit과 tag를 자동으로 되돌리지 않습니다."
 release_tag_object=$(git rev-parse "refs/tags/$version") || fail "생성된 $version 태그 object ID를 읽지 못했습니다. commit과 tag를 자동으로 되돌리지 않습니다."
@@ -142,7 +142,7 @@ remote_tag_before_push=$(git ls-remote --exit-code --tags origin "refs/tags/$ver
 remote_tag_before_push_status=$?
 set -e
 case "$remote_tag_before_push_status" in
-    0) fail "push 직전 원격 태그 $version이 생겼습니다. commit과 tag는 로컬에 남습니다." ;;
+    0) fail "push 직전 원격 태그 ${version}이 생겼습니다. commit과 tag는 로컬에 남습니다." ;;
     2) ;;
     *) fail "push 직전 원격 태그 $version 확인에 실패했습니다. 원격 오류 원문은 URL 보호를 위해 출력하지 않습니다." ;;
 esac
@@ -150,7 +150,7 @@ esac
 if ! git -c push.followTags=false -c remote.origin.mirror=false push --atomic --no-follow-tags --recurse-submodules=no origin \
     "$release_commit:refs/heads/$branch" \
     "$release_tag_object:refs/tags/$version" >/dev/null 2>&1; then
-    fail "atomic push에 실패했습니다. 원격 오류 원문과 URL은 출력하지 않고 비원자적 방식으로 재시도하지 않습니다. 로컬 commit $release_commit과 태그 $version은 남습니다."
+    fail "atomic push에 실패했습니다. 원격 오류 원문과 URL은 출력하지 않고 비원자적 방식으로 재시도하지 않습니다. 로컬 commit ${release_commit}과 태그 ${version}은 남습니다."
 fi
 
 remote_branch_output=$(git ls-remote --exit-code origin "refs/heads/$branch" 2>/dev/null) || fail "push 후 원격 브랜치 SHA 조회에 실패했습니다. 원격 URL은 출력하지 않습니다."

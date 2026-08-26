@@ -312,9 +312,15 @@ git clone --branch main "$test_root/origin.git" "$test_root/push-fail" >/dev/nul
     git config user.email "release-skill@example.invalid"
     push_fail_base=$(git rev-parse HEAD)
     set_fixture_version 2.0.0
-    if run_publish 2.0.0 >/dev/null 2>&1; then
-        fail "publish succeeded after the atomic push was rejected"
-    fi
+    set +e
+    push_failure_output=$(run_publish 2.0.0 2>&1)
+    push_failure_status=$?
+    set -e
+    [ "$push_failure_status" -ne 0 ] || fail "publish succeeded after the atomic push was rejected"
+    printf '%s\n' "$push_failure_output" | grep -q 'atomic push에 실패했습니다' || fail "push failure did not report the expected state"
+    case "$push_failure_output" in
+        *"unbound variable"*) fail "push failure expanded a Korean suffix as part of a variable name" ;;
+    esac
     push_fail_commit=$(git rev-parse HEAD)
     [ "$push_fail_commit" != "$push_fail_base" ] || fail "push failure did not leave the release commit locally"
     [ "$(git cat-file -t refs/tags/2.0.0)" = "tag" ] || fail "push failure did not leave an annotated tag"
