@@ -8,20 +8,11 @@
 @interface VideoPlayer : CDVPlugin {
     AVPlayerViewController *playerViewController;
     AVPlayer *player;
-    NSString *audioSessionCategoryBeforeSilentMode;
-    NSString *audioSessionModeBeforeSilentMode;
-    AVAudioSessionCategoryOptions audioSessionCategoryOptionsBeforeSilentMode;
-    AVAudioSessionRouteSharingPolicy audioSessionRouteSharingPolicyBeforeSilentMode;
-    BOOL capturedAudioSessionRouteSharingPolicy;
-    BOOL shouldRestoreAudioSessionCategory;
 }
 
 
 - (void)play:(CDVInvokedUrlCommand*)command;
 - (void)close:(CDVInvokedUrlCommand*)command;
-- (BOOL)restoreAudioSessionCategoryIfNeeded;
-- (void)discardAudioSessionSnapshot;
-- (BOOL)audioSessionUsesSilentModeConfiguration:(AVAudioSession *)audioSession;
 @end
 
 @implementation VideoPlayer
@@ -41,6 +32,34 @@
         }
     }
 
+    /**
+     오디오 세션 설정은 AVPlayer 객체를 생성하고 사용하기 전에 별도로 이루어집니다.
+     AVAudioSession 설정은 앱의 오디오 동작을 정의하는 것으로, 실제 플레이어 객체와 직접 연결되지 않아도 동작합니다.
+
+     AVAudioSession은 애플리케이션 전체에서 오디오 동작을 관리하는 싱글톤 객체입니다.
+     이 설정은 앱이 오디오를 재생하거나 녹음하는 방식에 대한 전반적인 맥락을 제공하며, 오디오 하드웨어의 사용법을 결정합니다.
+     따라서 오디오 세션을 설정하는 것은 AVPlayer가 오디오를 재생할 때 올바른 오디오 컨텍스트가 설정되었는지를 보장하는 일반적인 단계입니다.
+    */
+    NSError *sessionError = nil;
+    NSString *audioSessionCategory = respectSilentMode
+        ? AVAudioSessionCategoryAmbient
+        : AVAudioSessionCategoryPlayback;
+    BOOL success = [[AVAudioSession sharedInstance] setCategory:audioSessionCategory error:&sessionError];
+    if (!success) {
+        NSString *errorMessage = [NSString stringWithFormat:@"AVAudioSession setCategory error: %@", sessionError.localizedDescription];
+        CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:errorMessage];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+        return;
+    }
+
+    success = [[AVAudioSession sharedInstance] setActive:YES error:&sessionError];
+    if (!success) {
+        NSString *errorMessage = [NSString stringWithFormat:@"AVAudioSession setActive error: %@", sessionError.localizedDescription];
+        CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:errorMessage];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+        return;
+    }
+
     NSString *mediaUrl = [command.arguments objectAtIndex:0];
     if (mediaUrl == nil || [mediaUrl length] == 0) {
         pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Media URL was not provided"];
@@ -51,57 +70,6 @@
     NSURL *url = [NSURL URLWithString:mediaUrl];
     if (url == nil) {
         pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Invalid media URL"];
-        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-        return;
-    }
-
-    /**
-     오디오 세션 설정은 AVPlayer 객체를 생성하고 사용하기 전에 별도로 이루어집니다.
-     AVAudioSession 설정은 앱의 오디오 동작을 정의하는 것으로, 실제 플레이어 객체와 직접 연결되지 않아도 동작합니다.
-
-     AVAudioSession은 애플리케이션 전체에서 오디오 동작을 관리하는 싱글톤 객체입니다.
-     이 설정은 앱이 오디오를 재생하거나 녹음하는 방식에 대한 전반적인 맥락을 제공하며, 오디오 하드웨어의 사용법을 결정합니다.
-     따라서 오디오 세션을 설정하는 것은 AVPlayer가 오디오를 재생할 때 올바른 오디오 컨텍스트가 설정되었는지를 보장하는 일반적인 단계입니다.
-    */
-    AVAudioSession *audioSession = [AVAudioSession sharedInstance];
-    if (respectSilentMode && !shouldRestoreAudioSessionCategory) {
-        audioSessionCategoryBeforeSilentMode = audioSession.category;
-        audioSessionModeBeforeSilentMode = audioSession.mode;
-        audioSessionCategoryOptionsBeforeSilentMode = audioSession.categoryOptions;
-        if (@available(iOS 11.0, *)) {
-            audioSessionRouteSharingPolicyBeforeSilentMode = audioSession.routeSharingPolicy;
-            capturedAudioSessionRouteSharingPolicy = YES;
-        }
-        shouldRestoreAudioSessionCategory = YES;
-    }
-
-    NSError *sessionError = nil;
-    BOOL success = respectSilentMode
-        ? [audioSession setCategory:AVAudioSessionCategoryAmbient
-                               mode:AVAudioSessionModeDefault
-                            options:0
-                              error:&sessionError]
-        : [audioSession setCategory:AVAudioSessionCategoryPlayback error:&sessionError];
-    if (!success) {
-        if (respectSilentMode) {
-            [self discardAudioSessionSnapshot];
-        } else {
-            [self restoreAudioSessionCategoryIfNeeded];
-        }
-        NSString *errorMessage = [NSString stringWithFormat:@"AVAudioSession setCategory error: %@", sessionError.localizedDescription];
-        CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:errorMessage];
-        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-        return;
-    }
-    if (!respectSilentMode) {
-        [self discardAudioSessionSnapshot];
-    }
-
-    success = [audioSession setActive:YES error:&sessionError];
-    if (!success) {
-        [self restoreAudioSessionCategoryIfNeeded];
-        NSString *errorMessage = [NSString stringWithFormat:@"AVAudioSession setActive error: %@", sessionError.localizedDescription];
-        CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:errorMessage];
         [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
         return;
     }
@@ -141,15 +109,12 @@
         [player pause];
         player = nil;
     }
-    BOOL audioSessionRestored = [self restoreAudioSessionCategoryIfNeeded];
 
     if (playerViewController.presentingViewController) {
         [playerViewController dismissViewControllerAnimated:YES completion:^{
             playerViewController = nil;
 
-            CDVPluginResult* pluginResult = audioSessionRestored
-                ? [CDVPluginResult resultWithStatus:CDVCommandStatus_OK]
-                : [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"AVAudioSession category could not be restored"];
+            CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
             [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
         }];
     } else {
@@ -170,7 +135,6 @@
 {
     // 옵저버 제거
     [[NSNotificationCenter defaultCenter] removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:nil];
-    [self restoreAudioSessionCategoryIfNeeded];
 
     // 영상 재생이 완료되면 playerViewController를 닫음
     [playerViewController dismissViewControllerAnimated:NO completion:^{
@@ -183,7 +147,6 @@
 - (void)handleVideoTap:(UITapGestureRecognizer *)recognizer {
     // 재생을 멈추고
     [player pause];
-    [self restoreAudioSessionCategoryIfNeeded];
 
     // 옵저버를 제거
     [[NSNotificationCenter defaultCenter] removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:player.currentItem];
@@ -195,76 +158,6 @@
             player = nil;
         }];
     }
-}
-
-- (BOOL)restoreAudioSessionCategoryIfNeeded
-{
-    if (!shouldRestoreAudioSessionCategory || audioSessionCategoryBeforeSilentMode == nil) {
-        return YES;
-    }
-
-    AVAudioSession *audioSession = [AVAudioSession sharedInstance];
-    if (![self audioSessionUsesSilentModeConfiguration:audioSession]) {
-        [self discardAudioSessionSnapshot];
-        return YES;
-    }
-
-    NSString *categoryToRestore = audioSessionCategoryBeforeSilentMode;
-    NSString *modeToRestore = audioSessionModeBeforeSilentMode;
-    AVAudioSessionCategoryOptions optionsToRestore = audioSessionCategoryOptionsBeforeSilentMode;
-    AVAudioSessionRouteSharingPolicy routeSharingPolicyToRestore = audioSessionRouteSharingPolicyBeforeSilentMode;
-    BOOL shouldRestoreRouteSharingPolicy = capturedAudioSessionRouteSharingPolicy;
-
-    NSError *sessionError = nil;
-    BOOL success = NO;
-    if (@available(iOS 11.0, *)) {
-        if (shouldRestoreRouteSharingPolicy && routeSharingPolicyToRestore != AVAudioSessionRouteSharingPolicyDefault) {
-            success = [audioSession setCategory:categoryToRestore
-                                           mode:modeToRestore
-                             routeSharingPolicy:routeSharingPolicyToRestore
-                                        options:optionsToRestore
-                                          error:&sessionError];
-        } else {
-            success = [audioSession setCategory:categoryToRestore
-                                           mode:modeToRestore
-                                        options:optionsToRestore
-                                          error:&sessionError];
-        }
-    } else {
-        success = [audioSession setCategory:categoryToRestore
-                                       mode:modeToRestore
-                                    options:optionsToRestore
-                                      error:&sessionError];
-    }
-    if (success) {
-        [self discardAudioSessionSnapshot];
-    } else {
-        NSLog(@"AVAudioSession restore category error: %@", sessionError.localizedDescription);
-    }
-    return success;
-}
-
-- (void)discardAudioSessionSnapshot
-{
-    audioSessionCategoryBeforeSilentMode = nil;
-    audioSessionModeBeforeSilentMode = nil;
-    audioSessionCategoryOptionsBeforeSilentMode = 0;
-    capturedAudioSessionRouteSharingPolicy = NO;
-    shouldRestoreAudioSessionCategory = NO;
-}
-
-- (BOOL)audioSessionUsesSilentModeConfiguration:(AVAudioSession *)audioSession
-{
-    if (![audioSession.category isEqualToString:AVAudioSessionCategoryAmbient]
-        || ![audioSession.mode isEqualToString:AVAudioSessionModeDefault]
-        || audioSession.categoryOptions != 0) {
-        return NO;
-    }
-
-    if (@available(iOS 11.0, *)) {
-        return audioSession.routeSharingPolicy == AVAudioSessionRouteSharingPolicyDefault;
-    }
-    return YES;
 }
 
 @end
