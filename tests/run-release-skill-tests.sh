@@ -25,10 +25,18 @@ set_fixture_version() {
     ' -- "$1"
 }
 
+run_publish() {
+    publish_version=$1
+    publish_branch=$(git symbolic-ref --short HEAD)
+    publish_base=$(git rev-parse HEAD)
+    publish_origin_url=$(git remote get-url origin)
+    sh "$publish" "$publish_version" "$publish_branch" "$publish_base" "$publish_origin_url"
+}
+
 [ "$(readlink "$repo_root/.agents/skills/release")" = "../../.claude/skills/release" ] || fail "release skill symlink target mismatch"
 grep -q '^name: release$' "$repo_root/.claude/skills/release/SKILL.md" || fail "release skill frontmatter missing"
-grep -q 'git push --atomic origin' "$publish" || fail "atomic push missing"
-if grep -E '^[[:space:]]*(if[[:space:]]+![[:space:]]+)?git push' "$publish" | grep -Eq -- '--follow-tags|--tags|--force'; then
+grep -q 'push --atomic --no-follow-tags' "$publish" || fail "atomic push missing"
+if grep -E '^[[:space:]]*(if[[:space:]]+![[:space:]]+)?git .* push' "$publish" | grep -Eq -- '--follow-tags|--tags|--force'; then
     fail "publish script contains a forbidden broad or force push option"
 fi
 
@@ -66,6 +74,18 @@ if sh "$preflight" >/dev/null 2>&1; then
 fi
 git config branch.main.merge refs/heads/main
 
+git init --bare "$test_root/second-origin.git" >/dev/null
+git clone --branch main "$test_root/origin.git" "$test_root/multi-push" >/dev/null 2>&1
+(
+    cd "$test_root/multi-push"
+    first_origin=$(git remote get-url origin)
+    git remote set-url --add --push origin "$first_origin"
+    git remote set-url --add --push origin "$test_root/second-origin.git"
+    if sh "$preflight" >/dev/null 2>&1; then
+        fail "preflight accepted multiple origin push URLs"
+    fi
+)
+
 git clone --branch main "$test_root/origin.git" "$test_root/ahead" >/dev/null 2>&1
 (
     cd "$test_root/ahead"
@@ -87,7 +107,7 @@ git clone --branch main "$test_root/origin.git" "$test_root/hook" >/dev/null 2>&
     chmod +x .git/hooks/pre-commit
     set_fixture_version 1.1.0
     hook_base=$(git rev-parse HEAD)
-    if sh "$publish" 1.1.0 >/dev/null 2>&1; then
+    if run_publish 1.1.0 >/dev/null 2>&1; then
         fail "publish accepted a path added by a pre-commit hook"
     fi
     [ "$(git rev-parse HEAD)" != "$hook_base" ] || fail "hook rejection did not leave the release commit locally"
@@ -106,7 +126,7 @@ git clone --branch main "$test_root/origin.git" "$test_root/local-tag" >/dev/nul
     local_tag_base=$(git rev-parse HEAD)
     git tag -a 1.2.0 -m "existing local tag"
     set_fixture_version 1.2.0
-    if sh "$publish" 1.2.0 >/dev/null 2>&1; then
+    if run_publish 1.2.0 >/dev/null 2>&1; then
         fail "publish accepted an existing local tag"
     fi
     [ "$(git rev-parse HEAD)" = "$local_tag_base" ] || fail "local tag collision created a commit"
@@ -125,7 +145,7 @@ git clone --branch main "$test_root/origin.git" "$test_root/remote-tag" >/dev/nu
     remote_tag_base=$(git rev-parse HEAD)
     remote_tag_before=$(git ls-remote origin 'refs/tags/1.3.0^{}' | awk 'NR==1 {print $1}')
     set_fixture_version 1.3.0
-    if sh "$publish" 1.3.0 >/dev/null 2>&1; then
+    if run_publish 1.3.0 >/dev/null 2>&1; then
         fail "publish accepted an existing remote tag"
     fi
     [ "$(git rev-parse HEAD)" = "$remote_tag_base" ] || fail "remote tag collision created a commit"
@@ -143,7 +163,7 @@ git clone --branch main "$test_root/origin.git" "$test_root/npm-fail" >/dev/null
     git config user.email "release-skill@example.invalid"
     npm_fail_base=$(git rev-parse HEAD)
     set_fixture_version 1.4.0
-    if PATH="$test_root/fail-bin:$PATH" sh "$publish" 1.4.0 >/dev/null 2>&1; then
+    if PATH="$test_root/fail-bin:$PATH" run_publish 1.4.0 >/dev/null 2>&1; then
         fail "publish continued after npm test failed"
     fi
     [ "$(git rev-parse HEAD)" = "$npm_fail_base" ] || fail "npm failure created a commit"
@@ -163,7 +183,7 @@ git clone --branch main "$test_root/origin.git" "$test_root/push-fail" >/dev/nul
     git config user.email "release-skill@example.invalid"
     push_fail_base=$(git rev-parse HEAD)
     set_fixture_version 2.0.0
-    if sh "$publish" 2.0.0 >/dev/null 2>&1; then
+    if run_publish 2.0.0 >/dev/null 2>&1; then
         fail "publish succeeded after the atomic push was rejected"
     fi
     push_fail_commit=$(git rev-parse HEAD)
@@ -174,11 +194,13 @@ git clone --branch main "$test_root/origin.git" "$test_root/push-fail" >/dev/nul
     [ -z "$(git ls-remote origin refs/tags/2.0.0)" ] || fail "rejected atomic push changed the remote tag"
 )
 
+git config push.followTags true
+git config remote.origin.mirror true
 git tag -a unrelated -m unrelated
 
 set_fixture_version 1.1.0
 
-sh "$publish" 1.1.0 >/dev/null
+run_publish 1.1.0 >/dev/null
 release_commit=$(git rev-parse HEAD)
 [ "$(git ls-remote origin refs/heads/main | awk 'NR==1 {print $1}')" = "$release_commit" ] || fail "remote branch SHA mismatch"
 [ "$(git ls-remote origin 'refs/tags/1.1.0^{}' | awk 'NR==1 {print $1}')" = "$release_commit" ] || fail "remote tag peeled SHA mismatch"
@@ -187,7 +209,7 @@ release_commit=$(git rev-parse HEAD)
 set_fixture_version 1.1.2
 printf '%s\n' dirty >> README.md
 before_failed_release=$(git rev-parse HEAD)
-if sh "$publish" 1.1.2 >/dev/null 2>&1; then
+if run_publish 1.1.2 >/dev/null 2>&1; then
     fail "publish accepted an unrelated dirty file"
 fi
 [ "$(git rev-parse HEAD)" = "$before_failed_release" ] || fail "failed publish created a commit"

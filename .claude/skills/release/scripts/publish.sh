@@ -7,7 +7,13 @@ fail() {
 }
 
 version=${1-}
+expected_branch=${2-}
+expected_base=${3-}
+expected_origin_url=${4-}
 printf '%s\n' "$version" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' || fail "새 버전은 안정 SemVer M.m.p 형식이어야 합니다: $version"
+printf '%s\n' "$expected_branch" | grep -Eq '^[A-Za-z0-9._/][A-Za-z0-9._/-]*$' || fail "preflight 브랜치가 안전한 형식이 아닙니다: $expected_branch"
+printf '%s\n' "$expected_base" | grep -Eq '^[0-9a-f]{40,64}$' || fail "preflight base가 Git object ID 형식이 아닙니다: $expected_base"
+[ -n "$expected_origin_url" ] || fail "preflight origin URL이 비어 있습니다."
 
 repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || fail "Git 저장소 루트를 확인할 수 없습니다."
 resolved_root=$(cd "$repo_root" && pwd -P) || fail "Git 저장소 루트 경로를 확인할 수 없습니다."
@@ -17,13 +23,22 @@ branch=$(git symbolic-ref --short HEAD 2>/dev/null) || fail "현재 HEAD가 symb
 case "$branch" in
     ""|-*|*[!A-Za-z0-9._/-]*) fail "안전하게 사용할 수 없는 브랜치 이름입니다: $branch" ;;
 esac
+[ "$branch" = "$expected_branch" ] || fail "현재 브랜치가 preflight 결과와 다릅니다: $branch"
 upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null) || fail "현재 브랜치에 upstream이 없습니다."
 [ "$upstream" = "origin/$branch" ] || fail "upstream이 origin의 같은 이름 브랜치가 아닙니다: $upstream"
+
+origin_fetch_urls=$(git remote get-url --all origin 2>/dev/null) || fail "origin fetch URL을 읽지 못했습니다."
+origin_push_urls=$(git remote get-url --push --all origin 2>/dev/null) || fail "origin push URL을 읽지 못했습니다."
+[ "$(printf '%s\n' "$origin_fetch_urls" | wc -l | tr -d ' ')" -eq 1 ] || fail "origin fetch URL은 정확히 하나여야 합니다."
+[ "$(printf '%s\n' "$origin_push_urls" | wc -l | tr -d ' ')" -eq 1 ] || fail "origin push URL은 정확히 하나여야 합니다."
+[ "$origin_fetch_urls" = "$expected_origin_url" ] || fail "origin fetch URL이 preflight 결과와 다릅니다."
+[ "$origin_push_urls" = "$expected_origin_url" ] || fail "origin push URL이 preflight 결과와 다릅니다."
 
 git fetch origin "refs/heads/$branch:refs/remotes/origin/$branch" || fail "origin/$branch fetch에 실패했습니다. 버전 파일은 수정된 상태로 남습니다."
 local_head=$(git rev-parse HEAD) || fail "로컬 HEAD를 읽지 못했습니다. 버전 파일은 수정된 상태로 남습니다."
 remote_head=$(git rev-parse "refs/remotes/origin/$branch") || fail "origin/$branch SHA를 읽지 못했습니다. 버전 파일은 수정된 상태로 남습니다."
-[ "$local_head" = "$remote_head" ] || fail "version-up 이후 원격 브랜치가 바뀌었거나 로컬 HEAD가 이동했습니다. 버전 파일은 수정된 상태로 남습니다."
+[ "$local_head" = "$expected_base" ] || fail "version-up 이후 로컬 HEAD가 preflight base에서 이동했습니다. 버전 파일은 수정된 상태로 남습니다."
+[ "$remote_head" = "$expected_base" ] || fail "version-up 이후 원격 브랜치가 preflight base에서 이동했습니다. 버전 파일은 수정된 상태로 남습니다."
 
 git diff --cached --quiet -- || fail "version-up 전에 없던 staged change가 있습니다. commit하지 않고 중단합니다."
 changed_files=$(git diff --name-only --)
@@ -101,11 +116,13 @@ while((match=attributes.exec(tag[0]))!==null){if(match[1]==="version"){pluginVer
 if(packageJson.version!==expected||pluginVersion!==expected)fail("release commit의 두 버전 원본이 "+expected+"과 일치하지 않습니다");
 ' -- "$release_commit" "$version" || fail "release commit의 버전 blob 검증에 실패했습니다. commit $release_commit은 로컬에 남습니다."
 
-git tag -a "$version" -m "Cordova plugin $version" || fail "annotated 태그 생성에 실패했습니다. release commit $release_commit은 로컬에 남습니다."
+git tag -a "$version" -m "Cordova plugin $version" "$release_commit" || fail "annotated 태그 생성에 실패했습니다. release commit $release_commit은 로컬에 남습니다."
 [ "$(git cat-file -t "refs/tags/$version")" = "tag" ] || fail "생성된 $version 태그가 annotated tag가 아닙니다. commit과 tag를 자동으로 되돌리지 않습니다."
+[ "$(git rev-parse "refs/tags/$version^{}")" = "$release_commit" ] || fail "생성된 $version 태그가 release commit을 가리키지 않습니다. commit과 tag를 자동으로 되돌리지 않습니다."
+[ "$(git rev-parse "refs/heads/$branch")" = "$release_commit" ] || fail "현재 브랜치 ref가 release commit에서 이동했습니다. commit과 tag를 자동으로 되돌리지 않습니다."
 
-if ! git push --atomic origin \
-    "refs/heads/$branch:refs/heads/$branch" \
+if ! git -c push.followTags=false -c remote.origin.mirror=false push --atomic --no-follow-tags --recurse-submodules=no origin \
+    "$release_commit:refs/heads/$branch" \
     "refs/tags/$version:refs/tags/$version"; then
     fail "atomic push에 실패했습니다. 비원자적 방식으로 재시도하지 않습니다. 로컬 commit $release_commit과 태그 $version은 남습니다."
 fi

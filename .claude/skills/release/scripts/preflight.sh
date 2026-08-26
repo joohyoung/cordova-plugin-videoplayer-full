@@ -20,6 +20,14 @@ esac
 upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null) || fail "현재 브랜치에 upstream이 없습니다. 파일을 수정하지 않고 중단합니다."
 [ "$upstream" = "origin/$branch" ] || fail "upstream이 origin의 같은 이름 브랜치가 아닙니다: $upstream"
 
+origin_fetch_urls=$(git remote get-url --all origin 2>/dev/null) || fail "origin fetch URL을 읽지 못했습니다. 파일을 수정하지 않고 중단합니다."
+origin_push_urls=$(git remote get-url --push --all origin 2>/dev/null) || fail "origin push URL을 읽지 못했습니다. 파일을 수정하지 않고 중단합니다."
+[ -n "$origin_fetch_urls" ] || fail "origin fetch URL이 비어 있습니다. 파일을 수정하지 않고 중단합니다."
+[ "$(printf '%s\n' "$origin_fetch_urls" | wc -l | tr -d ' ')" -eq 1 ] || fail "origin fetch URL은 정확히 하나여야 합니다. 파일을 수정하지 않고 중단합니다."
+[ "$(printf '%s\n' "$origin_push_urls" | wc -l | tr -d ' ')" -eq 1 ] || fail "origin push URL은 정확히 하나여야 합니다. 파일을 수정하지 않고 중단합니다."
+[ "$origin_fetch_urls" = "$origin_push_urls" ] || fail "origin fetch URL과 push URL이 다릅니다. 파일을 수정하지 않고 중단합니다."
+origin_url=$origin_fetch_urls
+
 git fetch origin "refs/heads/$branch:refs/remotes/origin/$branch" || fail "origin/$branch fetch에 실패했습니다. 파일을 수정하지 않고 중단합니다."
 local_head=$(git rev-parse HEAD) || fail "로컬 HEAD를 읽지 못했습니다."
 remote_head=$(git rev-parse "refs/remotes/origin/$branch") || fail "origin/$branch SHA를 읽지 못했습니다."
@@ -27,3 +35,4 @@ remote_head=$(git rev-parse "refs/remotes/origin/$branch") || fail "origin/$bran
 
 printf 'release branch: %s\n' "$branch"
 printf 'release base: %s\n' "$local_head"
+printf 'release origin URL: %s\n' "$origin_url"
