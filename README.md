@@ -94,7 +94,6 @@ The skill source lives at `.claude/skills/version-up/SKILL.md`, and `.agents/ski
 
 Use the separate `release` skill only when the version change should also be committed, tagged, and pushed. It runs `version-up`, commits only `package.json` and `plugin.xml`, creates an annotated tag named after the new version, and atomically pushes the explicit current-branch and tag refs. It does not use `--follow-tags`, publish to npm, create a GitHub release, or write a CHANGELOG. Its shared source is `.claude/skills/release`, with `.agents/skills/release` pointing to the same directory.
 
-
 # Troubleshooting
 
 **When playing a video for the first time, everything works great. when calling .close() function the video closes great. 2nd time around, the .play() is called the same way as the first time. The video plays fine for the second time. Now when trying to close it before the video ends, the app fatally crash.**

@@ -34,6 +34,37 @@ git remote add origin "$test_root/origin.git"
 git push -u origin main >/dev/null
 
 sh "$preflight" >/dev/null
+
+printf '%s\n' 'dirty' >> README.md
+if sh "$preflight" >/dev/null 2>&1; then
+    fail "preflight accepted a dirty worktree"
+fi
+git restore -- README.md
+
+git switch --detach >/dev/null 2>&1
+if sh "$preflight" >/dev/null 2>&1; then
+    fail "preflight accepted a detached HEAD"
+fi
+git switch main >/dev/null 2>&1
+
+git config branch.main.merge refs/heads/not-main
+if sh "$preflight" >/dev/null 2>&1; then
+    fail "preflight accepted a mismatched upstream"
+fi
+git config branch.main.merge refs/heads/main
+
+git clone --branch main "$test_root/origin.git" "$test_root/ahead" >/dev/null 2>&1
+(
+    cd "$test_root/ahead"
+    git config user.name "Release Skill Test"
+    git config user.email "release-skill@example.invalid"
+    git commit --allow-empty -m "local ahead" >/dev/null
+    if sh "$preflight" >/dev/null 2>&1; then
+        fail "preflight accepted a local HEAD that differs from origin"
+    fi
+    [ "$(node -p 'require("./package.json").version')" = "1.0.0" ] || fail "failed preflight modified the version"
+)
+
 git tag -a unrelated -m unrelated
 
 node -e '
