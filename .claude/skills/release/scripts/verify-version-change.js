@@ -101,17 +101,19 @@ function pluginVersionRange(text) {
     });
     var tag = masked.match(/<plugin(?=[\s>\/])[^>]*>/);
     if (!tag) fail("plugin.xml 루트 <plugin> 여는 태그를 찾지 못했습니다");
-    var attributes = /\s([A-Za-z_:][-\w:.]*)\s*=\s*(["'])([^"']*)\2/g;
+    var attributes = /\s([A-Za-z_:][-\w:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
     var found = null;
     var match;
     while ((match = attributes.exec(tag[0])) !== null) {
         if (match[1] === "version") {
             if (found) fail("plugin.xml 루트 version 속성이 중복됩니다");
-            var quoted = match[2] + match[3] + match[2];
+            var quote = match[2] !== undefined ? "\"" : "'";
+            var value = match[2] !== undefined ? match[2] : match[3];
+            var quoted = quote + value + quote;
             var relative = match[0].lastIndexOf(quoted) + 1;
             found = {
                 start: tag.index + match.index + relative,
-                end: tag.index + match.index + relative + match[3].length
+                end: tag.index + match.index + relative + value.length
             };
         }
     }
@@ -147,6 +149,8 @@ if (targetPackage !== expectedPackage) fail("package.json은 최상위 version �
 var basePlugin = readBlob(base, "plugin.xml");
 var targetPlugin = targetCommit ? readBlob(targetCommit, "plugin.xml") : fs.readFileSync("plugin.xml", "utf8");
 var basePluginRange = pluginVersionRange(basePlugin);
+var basePluginVersion = basePlugin.slice(basePluginRange.start, basePluginRange.end);
+if (basePluginVersion !== basePackageVersion) fail("base의 두 버전 원본이 서로 다릅니다");
 var expectedPlugin = replaceRange(basePlugin, basePluginRange, expectedVersion);
 if (targetPlugin !== expectedPlugin) fail("plugin.xml은 루트 plugin version 이외의 내용도 변경됐습니다");
 
