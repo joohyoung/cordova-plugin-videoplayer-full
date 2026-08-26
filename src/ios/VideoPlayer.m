@@ -19,7 +19,9 @@
 
 - (void)play:(CDVInvokedUrlCommand*)command;
 - (void)close:(CDVInvokedUrlCommand*)command;
-- (void)restoreAudioSessionCategoryIfNeeded;
+- (BOOL)restoreAudioSessionCategoryIfNeeded;
+- (void)discardAudioSessionSnapshot;
+- (BOOL)audioSessionUsesSilentModeConfiguration:(AVAudioSession *)audioSession;
 @end
 
 @implementation VideoPlayer
@@ -82,11 +84,7 @@
         : [audioSession setCategory:AVAudioSessionCategoryPlayback error:&sessionError];
     if (!success) {
         if (respectSilentMode) {
-            audioSessionCategoryBeforeSilentMode = nil;
-            audioSessionModeBeforeSilentMode = nil;
-            audioSessionCategoryOptionsBeforeSilentMode = 0;
-            capturedAudioSessionRouteSharingPolicy = NO;
-            shouldRestoreAudioSessionCategory = NO;
+            [self discardAudioSessionSnapshot];
         } else {
             [self restoreAudioSessionCategoryIfNeeded];
         }
@@ -96,11 +94,7 @@
         return;
     }
     if (!respectSilentMode) {
-        audioSessionCategoryBeforeSilentMode = nil;
-        audioSessionModeBeforeSilentMode = nil;
-        audioSessionCategoryOptionsBeforeSilentMode = 0;
-        capturedAudioSessionRouteSharingPolicy = NO;
-        shouldRestoreAudioSessionCategory = NO;
+        [self discardAudioSessionSnapshot];
     }
 
     success = [audioSession setActive:YES error:&sessionError];
@@ -147,13 +141,15 @@
         [player pause];
         player = nil;
     }
-    [self restoreAudioSessionCategoryIfNeeded];
+    BOOL audioSessionRestored = [self restoreAudioSessionCategoryIfNeeded];
 
     if (playerViewController.presentingViewController) {
         [playerViewController dismissViewControllerAnimated:YES completion:^{
             playerViewController = nil;
 
-            CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+            CDVPluginResult* pluginResult = audioSessionRestored
+                ? [CDVPluginResult resultWithStatus:CDVCommandStatus_OK]
+                : [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"AVAudioSession category could not be restored"];
             [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
         }];
     } else {
@@ -201,10 +197,16 @@
     }
 }
 
-- (void)restoreAudioSessionCategoryIfNeeded
+- (BOOL)restoreAudioSessionCategoryIfNeeded
 {
     if (!shouldRestoreAudioSessionCategory || audioSessionCategoryBeforeSilentMode == nil) {
-        return;
+        return YES;
+    }
+
+    AVAudioSession *audioSession = [AVAudioSession sharedInstance];
+    if (![self audioSessionUsesSilentModeConfiguration:audioSession]) {
+        [self discardAudioSessionSnapshot];
+        return YES;
     }
 
     NSString *categoryToRestore = audioSessionCategoryBeforeSilentMode;
@@ -212,36 +214,57 @@
     AVAudioSessionCategoryOptions optionsToRestore = audioSessionCategoryOptionsBeforeSilentMode;
     AVAudioSessionRouteSharingPolicy routeSharingPolicyToRestore = audioSessionRouteSharingPolicyBeforeSilentMode;
     BOOL shouldRestoreRouteSharingPolicy = capturedAudioSessionRouteSharingPolicy;
-    shouldRestoreAudioSessionCategory = NO;
-    audioSessionCategoryBeforeSilentMode = nil;
-    audioSessionModeBeforeSilentMode = nil;
-    audioSessionCategoryOptionsBeforeSilentMode = 0;
-    capturedAudioSessionRouteSharingPolicy = NO;
 
     NSError *sessionError = nil;
     BOOL success = NO;
     if (@available(iOS 11.0, *)) {
         if (shouldRestoreRouteSharingPolicy && routeSharingPolicyToRestore != AVAudioSessionRouteSharingPolicyDefault) {
-            success = [[AVAudioSession sharedInstance] setCategory:categoryToRestore
-                                                              mode:modeToRestore
-                                                routeSharingPolicy:routeSharingPolicyToRestore
-                                                           options:optionsToRestore
-                                                             error:&sessionError];
+            success = [audioSession setCategory:categoryToRestore
+                                           mode:modeToRestore
+                             routeSharingPolicy:routeSharingPolicyToRestore
+                                        options:optionsToRestore
+                                          error:&sessionError];
         } else {
-            success = [[AVAudioSession sharedInstance] setCategory:categoryToRestore
-                                                              mode:modeToRestore
-                                                           options:optionsToRestore
-                                                             error:&sessionError];
+            success = [audioSession setCategory:categoryToRestore
+                                           mode:modeToRestore
+                                        options:optionsToRestore
+                                          error:&sessionError];
         }
     } else {
-        success = [[AVAudioSession sharedInstance] setCategory:categoryToRestore
-                                                          mode:modeToRestore
-                                                       options:optionsToRestore
-                                                         error:&sessionError];
+        success = [audioSession setCategory:categoryToRestore
+                                       mode:modeToRestore
+                                    options:optionsToRestore
+                                      error:&sessionError];
     }
-    if (!success) {
+    if (success) {
+        [self discardAudioSessionSnapshot];
+    } else {
         NSLog(@"AVAudioSession restore category error: %@", sessionError.localizedDescription);
     }
+    return success;
+}
+
+- (void)discardAudioSessionSnapshot
+{
+    audioSessionCategoryBeforeSilentMode = nil;
+    audioSessionModeBeforeSilentMode = nil;
+    audioSessionCategoryOptionsBeforeSilentMode = 0;
+    capturedAudioSessionRouteSharingPolicy = NO;
+    shouldRestoreAudioSessionCategory = NO;
+}
+
+- (BOOL)audioSessionUsesSilentModeConfiguration:(AVAudioSession *)audioSession
+{
+    if (![audioSession.category isEqualToString:AVAudioSessionCategoryAmbient]
+        || ![audioSession.mode isEqualToString:AVAudioSessionModeDefault]
+        || audioSession.categoryOptions != 0) {
+        return NO;
+    }
+
+    if (@available(iOS 11.0, *)) {
+        return audioSession.routeSharingPolicy == AVAudioSessionRouteSharingPolicyDefault;
+    }
+    return YES;
 }
 
 @end
