@@ -60,6 +60,19 @@ git commit -m "initial" >/dev/null
 git remote add origin "$test_root/origin.git"
 git push -u origin main >/dev/null
 
+invalid_tag_base=$(git rev-parse HEAD)
+set +e
+invalid_tag_output=$(sh "$publish" dev/1.1.0 2>&1)
+invalid_tag_status=$?
+set -e
+[ "$invalid_tag_status" -ne 0 ] || fail "publish accepted a dev-prefixed release tag"
+printf '%s\n' "$invalid_tag_output" | grep -q '접두사 없는 안정 SemVer' || fail "prefixed tag rejection did not explain the tag rule"
+[ "$(git rev-parse HEAD)" = "$invalid_tag_base" ] || fail "prefixed tag rejection created a commit"
+if git show-ref --verify --quiet refs/tags/dev/1.1.0; then
+    fail "prefixed tag rejection created a local tag"
+fi
+[ -z "$(git ls-remote origin refs/tags/dev/1.1.0)" ] || fail "prefixed tag rejection pushed a tag"
+
 sh "$preflight" >/dev/null
 
 printf '%s\n' 'dirty' >> README.md

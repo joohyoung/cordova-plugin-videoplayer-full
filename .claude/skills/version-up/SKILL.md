@@ -184,6 +184,7 @@ console.log(next);
 이 스킬은 아래를 **수행하지 않는다.** 사용자가 별도로 요청하면 그때 다른 절차로 처리한다.
 
 - `git commit`, `git tag`, `git push`
+- 릴리스 태그가 필요하면 별도 `release` 스킬을 사용한다. 그 스킬의 태그 이름은 버전과 정확히 같은 접두사 없는 SemVer다(`1.2.3`). `dev/1.2.3`이나 `v1.2.3`으로 바꾸지 않는다.
 - `npm publish`
 - GitHub release 생성
 - CHANGELOG 작성
