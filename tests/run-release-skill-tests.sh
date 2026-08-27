@@ -81,6 +81,16 @@ set -e
 [ "$multiline_status" -ne 0 ] || fail "publish accepted a multiline release version"
 printf '%s\n' "$multiline_output" | grep -q '접두사 없는 안정 SemVer' || fail "multiline version was not rejected by the version validator"
 
+control_version=$(printf '1.1.0\ncredential-marker\033[31m')
+set +e
+control_output=$(sh "$publish" "$control_version" 2>&1)
+control_status=$?
+set -e
+[ "$control_status" -ne 0 ] || fail "publish accepted a control-character release version"
+case "$control_output" in
+    *credential-marker*) fail "invalid version error exposed the rejected input" ;;
+esac
+
 sh "$preflight" >/dev/null
 
 printf '%s\n' 'dirty' >> README.md
