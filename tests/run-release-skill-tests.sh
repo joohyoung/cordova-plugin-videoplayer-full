@@ -60,6 +60,45 @@ git commit -m "initial" >/dev/null
 git remote add origin "$test_root/origin.git"
 git push -u origin main >/dev/null
 
+invalid_tag_base=$(git rev-parse HEAD)
+invalid_tag_status_before=$(git status --porcelain=v1)
+invalid_tag_package_before=$(git hash-object package.json)
+invalid_tag_plugin_before=$(git hash-object plugin.xml)
+invalid_tag_remote_before=$(git ls-remote origin refs/heads/main | cut -f1)
+set +e
+invalid_tag_output=$(sh "$publish" dev/1.1.0 2>&1)
+invalid_tag_status=$?
+set -e
+[ "$invalid_tag_status" -ne 0 ] || fail "publish accepted a dev-prefixed release tag"
+printf '%s\n' "$invalid_tag_output" | grep -q '접두사 없는 안정 SemVer' || fail "prefixed tag rejection did not explain the tag rule"
+[ "$(git rev-parse HEAD)" = "$invalid_tag_base" ] || fail "prefixed tag rejection created a commit"
+[ "$(git status --porcelain=v1)" = "$invalid_tag_status_before" ] || fail "prefixed tag rejection changed the worktree or index"
+[ "$(git hash-object package.json)" = "$invalid_tag_package_before" ] || fail "prefixed tag rejection changed package.json"
+[ "$(git hash-object plugin.xml)" = "$invalid_tag_plugin_before" ] || fail "prefixed tag rejection changed plugin.xml"
+[ "$(git ls-remote origin refs/heads/main | cut -f1)" = "$invalid_tag_remote_before" ] || fail "prefixed tag rejection changed the remote branch"
+if git show-ref --verify --quiet refs/tags/dev/1.1.0; then
+    fail "prefixed tag rejection created a local tag"
+fi
+[ -z "$(git ls-remote origin refs/tags/dev/1.1.0)" ] || fail "prefixed tag rejection pushed a tag"
+
+multiline_version=$(printf '1.1.0\ndev/1.1.0')
+set +e
+multiline_output=$(sh "$publish" "$multiline_version" 2>&1)
+multiline_status=$?
+set -e
+[ "$multiline_status" -ne 0 ] || fail "publish accepted a multiline release version"
+printf '%s\n' "$multiline_output" | grep -q '접두사 없는 안정 SemVer' || fail "multiline version was not rejected by the version validator"
+
+control_version=$(printf '1.1.0\ncredential-marker\033[31m')
+set +e
+control_output=$(sh "$publish" "$control_version" 2>&1)
+control_status=$?
+set -e
+[ "$control_status" -ne 0 ] || fail "publish accepted a control-character release version"
+case "$control_output" in
+    *credential-marker*) fail "invalid version error exposed the rejected input" ;;
+esac
+
 sh "$preflight" >/dev/null
 
 printf '%s\n' 'dirty' >> README.md

@@ -16,7 +16,7 @@ expected_base=${3-}
 expected_origin_fingerprint=${4-}
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || fail "release script 디렉터리를 확인할 수 없습니다."
 verify_version_change=$script_dir/verify-version-change.js
-printf '%s\n' "$version" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' || fail "새 버전은 안정 SemVer M.m.p 형식이어야 합니다: $version"
+node -e 'process.exit(/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(process.argv[1]) ? 0 : 1)' -- "$version" || fail "새 버전과 태그 이름은 접두사 없는 안정 SemVer M.m.p여야 합니다."
 printf '%s\n' "$expected_branch" | grep -Eq '^[A-Za-z0-9._/][A-Za-z0-9._/-]*$' || fail "preflight 브랜치가 안전한 형식이 아닙니다: $expected_branch"
 printf '%s\n' "$expected_base" | grep -Eq '^[0-9a-f]{40,64}$' || fail "preflight base가 Git object ID 형식이 아닙니다: $expected_base"
 printf '%s\n' "$expected_origin_fingerprint" | grep -Eq '^[0-9a-f]{64}$' || fail "preflight origin fingerprint 형식이 올바르지 않습니다."

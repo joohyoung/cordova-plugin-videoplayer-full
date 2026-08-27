@@ -1,6 +1,6 @@
 ---
 name: release
-description: 이 저장소의 Cordova 플러그인 릴리스를 만든다. 명시적인 릴리스 요청이나 "$release", "/release" 호출에서 기존 version-up으로 버전을 올린 뒤 두 버전 파일만 커밋하고 annotated 태그와 현재 브랜치를 원자적으로 push·검증할 때 사용한다. 단순 버전 수정에는 version-up을 사용한다.
+description: 이 저장소의 Cordova 플러그인 릴리스를 만든다. 명시적인 릴리스 요청이나 "$release", "/release" 호출에서 기존 version-up으로 버전을 올린 뒤 두 버전 파일만 커밋하고 접두사 없는 SemVer annotated 태그와 현재 브랜치를 원자적으로 push·검증할 때 사용한다. 단순 버전 수정에는 version-up을 사용한다.
 ---
 
 # release
@@ -8,6 +8,12 @@ description: 이 저장소의 Cordova 플러그인 릴리스를 만든다. 명�
 이 저장소의 Cordova 플러그인 버전 커밋과 태그를 원격에 함께 게시한다. `npm publish`, GitHub release, CHANGELOG는 만들지 않는다.
 
 단순히 버전 값만 바꾸라는 요청에는 이 스킬이 아니라 `version-up`을 사용한다. 이 스킬은 commit, tag, push까지 명시적으로 요청된 릴리스 작업에만 사용한다.
+
+## 태그 이름
+
+- 태그 이름은 검증된 새 버전 문자열과 정확히 같아야 한다. 예를 들어 버전 `1.2.3`의 태그는 `1.2.3`이다.
+- `dev/1.2.3`, `v1.2.3`, `release/1.2.3`처럼 접두사를 붙이거나 suffix를 더하지 않는다.
+- 접두사나 suffix가 포함된 태그를 요청받아도 이 스킬에서 변환·생성하지 않는다. 안정 SemVer `M.m.p` 자체가 아니므로 릴리스를 시작하기 전에 중단하고 접두사 없는 버전을 요청한다.
 
 ## 절차
 
@@ -18,9 +24,9 @@ description: 이 저장소의 Cordova 플러그인 릴리스를 만든다. 명�
 2. 사용자가 준 명시 버전 또는 `major`·`minor`·`patch`를 기존 `version-up` 스킬에 그대로 넘긴다. 인자가 없으면 그 스킬의 후보 선택 절차를 따른다.
    - `version-up`의 결과에서 검증된 새 버전을 `{새버전}`으로 기록한다.
    - `version-up`이 실패하면 이 스킬도 중단한다. 파일이 이미 수정된 상태인지는 그 스킬의 결과대로 보고한다.
-3. push 대상이 preflight가 보고한 현재 브랜치이고, 태그 이름이 `{새버전}`임을 사용자에게 알린다.
+3. push 대상이 preflight가 보고한 현재 브랜치이고, 태그 이름이 접두사 없는 `{새버전}` 그 자체임을 사용자에게 알린다.
 4. `sh .claude/skills/release/scripts/publish.sh "{새버전}" "{브랜치}" "{base}" "{origin-fingerprint}"`을 실행한다.
-   - 인자에는 `version-up`이 검증한 안정 SemVer 값만 넣는다.
+   - 인자에는 `version-up`이 검증한 접두사 없는 안정 SemVer 값만 넣는다. `dev/`·`v`·`release/` 등은 받지 않는다.
    - 스크립트는 버전 원본과 변경 경계를 다시 검증하고 `npm test`를 실행한 뒤 `package.json`과 `plugin.xml`만 stage·commit한다.
    - 두 파일은 base blob과 byte 단위로 비교해 지정된 version 필드·속성 외의 변경과 file mode 변경을 거부한다. `npm test` 뒤에도 branch, HEAD, upstream, origin URL, 작업 트리와 두 파일의 변경 경계를 다시 검증한다.
    - 같은 로컬·원격 태그가 없는 경우에만 `{새버전}` annotated 태그를 만든다.
