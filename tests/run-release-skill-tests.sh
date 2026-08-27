@@ -73,6 +73,14 @@ if git show-ref --verify --quiet refs/tags/dev/1.1.0; then
 fi
 [ -z "$(git ls-remote origin refs/tags/dev/1.1.0)" ] || fail "prefixed tag rejection pushed a tag"
 
+multiline_version=$(printf '1.1.0\ndev/1.1.0')
+set +e
+multiline_output=$(sh "$publish" "$multiline_version" 2>&1)
+multiline_status=$?
+set -e
+[ "$multiline_status" -ne 0 ] || fail "publish accepted a multiline release version"
+printf '%s\n' "$multiline_output" | grep -q '접두사 없는 안정 SemVer' || fail "multiline version was not rejected by the version validator"
+
 sh "$preflight" >/dev/null
 
 printf '%s\n' 'dirty' >> README.md
